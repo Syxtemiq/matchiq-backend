@@ -1,0 +1,18 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.log
+
+## Secrets (nunca al repo)
+appsettings.Development.json
+appsettings.Production.json
+
+## Migrations generadas (opcional, muchos equipos sí las commitean)
+# MatchIQ.Infrastructure/Persistence/Migrations/
+
+## OS
+.DS_Store
+Thumbs.db
