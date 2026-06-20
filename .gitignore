@@ -3,6 +3,9 @@ bin/
 obj/
 out/
 
+## Secrets (usar appsettings.example.json como plantilla)
+MatchIQ.API/appsettings.json
+
 ## Rider / ReSharper
 .idea/
 *.sln.iml
