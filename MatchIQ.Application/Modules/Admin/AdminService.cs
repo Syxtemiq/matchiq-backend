@@ -18,3 +18,4 @@ public class AdminService
     // TODO: GetStatsAsync()
     //       estadísticas generales: total candidatos, empresas, ofertas, matches
 }
+
