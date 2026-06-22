@@ -1,13 +1,12 @@
 namespace MatchIQ.Domain.Entities;
 
-// Token de refresco para renovar el JWT de acceso sin re-login
-// Se revoca al ser usado o al cerrar sesión explícitamente
-public class RefreshToken
+// Token de un solo uso para restablecer contraseña
+public class PasswordResetToken
 {
     public int Id { get; set; }
     public int UserId { get; set; }
     public string Token { get; set; } = string.Empty;
-    public bool Revoked { get; set; }
+    public bool Used { get; set; }
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; }
 

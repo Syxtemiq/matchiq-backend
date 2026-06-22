@@ -1,3 +1,5 @@
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Domain.Entities;
 
 // Pregunta individual dentro de un test
@@ -7,11 +9,27 @@ namespace MatchIQ.Domain.Entities;
 // Gorilla questions: preguntas con distractor oculto para medir atención
 public class TestQuestion
 {
-    // TODO: Id, TestId, OrderIndex, Type (QuestionType enum)
-    // TODO: QuestionText, OptionsJson (para MultipleChoice: {"A":..,"B":..,"C":..,"D":..})
-    // TODO: CorrectAnswer, Explanation, GorillaHint (solo si es gorilla type)
-    // TODO: IsGorilla (bool), Language (para CodeChallenge: "python", "javascript", etc.)
-    // TODO: FunctionSignature (para CodeChallenge: ej "def calcular_cobro(horas, minutos):")
-    // TODO: navegación a Test
-    // TODO: colección de QuestionChatMessage
+    public int Id { get; set; }
+    public int TestId { get; set; }
+    public int OrderIndex { get; set; }
+    public QuestionType QuestionType { get; set; }
+
+    public string QuestionText { get; set; } = string.Empty;
+    public string? Explanation { get; set; }
+    public bool IsGorilla { get; set; }
+    public string? GorillaHint { get; set; }
+
+    public string? OptionsJson { get; set; }   // para MultipleChoice: {"A":..,"B":..,"C":..,"D":..}
+    public string? CorrectAnswer { get; set; }
+
+    public string? Language { get; set; }            // para CodeChallenge: "python", "javascript", etc.
+    public string? FunctionSignature { get; set; }   // ej "def calcular_cobro(horas, minutos):"
+    public string? ExampleInput { get; set; }
+    public string? ExpectedBehavior { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+
+    public Test Test { get; set; } = null!;
+    public ICollection<QuestionChatMessage> QuestionChatMessages { get; set; } = new List<QuestionChatMessage>();
 }

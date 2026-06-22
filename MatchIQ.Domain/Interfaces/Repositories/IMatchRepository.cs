@@ -1,10 +1,13 @@
+using MatchIQ.Domain.Entities;
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Domain.Interfaces.Repositories;
 
 // Contrato de acceso a datos para matches
-// El método RunMatching llama la función SQL get_candidate_matches() via FromSqlRaw
+// El método RunMatchingAsync llama la función SQL get_candidate_matches() via FromSqlRaw
 public interface IMatchRepository
 {
-    // TODO: Task<IEnumerable<MatchResultDto>> RunMatchingAsync(int offerId)
-    // TODO: Task<IEnumerable<Match>> GetByOfferAsync(int offerId)
-    // TODO: Task UpdateStageAsync(int matchId, MatchStage stage)
+    Task<IEnumerable<Match>> RunMatchingAsync(int offerId);
+    Task<IEnumerable<Match>> GetByOfferAsync(int offerId);
+    Task UpdateStageAsync(int matchId, MatchStage stage);
 }

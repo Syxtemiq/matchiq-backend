@@ -4,7 +4,11 @@ namespace MatchIQ.Domain.Entities;
 // Una empresa tiene muchas ofertas (JobOffer)
 public class CompanyProfile
 {
-    // TODO: Id, UserId, CompanyName, CreatedAt
-    // TODO: navegación a User
-    // TODO: colección de JobOffer
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public string? CompanyName { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public User User { get; set; } = null!;
+    public ICollection<JobOffer> JobOffers { get; set; } = new List<JobOffer>();
 }

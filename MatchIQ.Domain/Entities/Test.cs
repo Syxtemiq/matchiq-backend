@@ -6,8 +6,13 @@ namespace MatchIQ.Domain.Entities;
 // El admin puede editar preguntas dialogando con la IA (ver QuestionChatMessage)
 public class Test
 {
-    // TODO: Id, OfferId, Title, TimeLimitMinutes, CreatedAt
-    // TODO: navegación a JobOffer
-    // TODO: colección de TestQuestion
-    // TODO: colección de TestSubmission
+    public int Id { get; set; }
+    public int OfferId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public int TimeLimitMinutes { get; set; } = 30;
+    public DateTime CreatedAt { get; set; }
+
+    public JobOffer JobOffer { get; set; } = null!;
+    public ICollection<TestQuestion> TestQuestions { get; set; } = new List<TestQuestion>();
+    public ICollection<TestSubmission> TestSubmissions { get; set; } = new List<TestSubmission>();
 }
