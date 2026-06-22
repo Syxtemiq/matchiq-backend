@@ -1,3 +1,5 @@
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Domain.Entities;
 
 // Respuesta de un candidato a un test completo
@@ -5,9 +7,18 @@ namespace MatchIQ.Domain.Entities;
 // Estados: Pending → Evaluated | Expired
 public class TestSubmission
 {
-    // TODO: Id, TestId, CandidateId
-    // TODO: AnswersJson (respuestas del candidato por pregunta)
-    // TODO: Score (0-100), Feedback (texto de la IA), Status (SubmissionStatus enum)
-    // TODO: StartedAt, SubmittedAt, AiEvaluatedAt
-    // TODO: navegación a Test y CandidateProfile
+    public int Id { get; set; }
+    public int TestId { get; set; }
+    public int CandidateId { get; set; }
+    public string? AnswersJson { get; set; }
+    public decimal? Score { get; set; }
+    public string? Feedback { get; set; }
+    public SubmissionStatus Status { get; set; } = SubmissionStatus.Pending;
+    public DateTime? StartedAt { get; set; }
+    public DateTime? SubmittedAt { get; set; }
+    public DateTime? AiEvaluatedAt { get; set; }
+    public DateTime? Deadline { get; set; }
+
+    public Test Test { get; set; } = null!;
+    public CandidateProfile CandidateProfile { get; set; } = null!;
 }
