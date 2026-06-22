@@ -1,3 +1,5 @@
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Domain.Entities;
 
 // Oferta laboral creada por una empresa
@@ -8,12 +10,31 @@ namespace MatchIQ.Domain.Entities;
 //   - solo se puede editar si está en estado Open
 public class JobOffer
 {
-    // TODO: Id, CompanyId, Title, Description, Salary, Modality
-    // TODO: MinExperienceYears, RequiredEnglishLevel, PositionsAvailable
-    // TODO: Status (Open | InProcess | Completed | Cancelled), CreatedAt
-    // TODO: navegación a CompanyProfile
-    // TODO: colección de OfferCategory
-    // TODO: colección de OfferSkill
-    // TODO: colección de Match
-    // TODO: relación 1-1 con Test
+    public int Id { get; set; }
+    public int CompanyId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal? Salary { get; set; }
+    public Modality Modality { get; set; }
+    public int? MinExperienceYears { get; set; }
+    public EnglishLevel? RequiredEnglishLevel { get; set; }
+    public int PositionsAvailable { get; set; } = 1;
+
+    public int TierId { get; set; }
+    public int? CandidatesToTest { get; set; }
+    public int CandidatesTestedCount { get; set; }
+
+    public OfferStatus Status { get; set; } = OfferStatus.PendingPayment;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public DateTime? TestSentAt { get; set; }
+
+    public CompanyProfile CompanyProfile { get; set; } = null!;
+    public PricingTier PricingTier { get; set; } = null!;
+    public Payment? Payment { get; set; }
+    public Test? Test { get; set; }
+    public ICollection<OfferCategory> OfferCategories { get; set; } = new List<OfferCategory>();
+    public ICollection<OfferSkill> OfferSkills { get; set; } = new List<OfferSkill>();
+    public ICollection<Match> Matches { get; set; } = new List<Match>();
 }

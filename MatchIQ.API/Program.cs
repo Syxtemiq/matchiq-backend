@@ -1,11 +1,13 @@
 // MatchIQ API - Entry point
 // Configura todos los servicios, middlewares y la pipeline de la aplicación
 
+using MatchIQ.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Servicios de infraestructura ──────────────────────────────────────────────
-// TODO: builder.Services.AddDbContext<AppDbContext>(options =>
-//           options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")))
+builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ── Autenticación JWT + Google OAuth ─────────────────────────────────────────
 // TODO: builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
