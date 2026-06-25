@@ -1,18 +1,28 @@
+using MatchIQ.Domain.Entities;
+using MatchIQ.Application.Common.Interfaces.Repositories;
+
 namespace MatchIQ.Infrastructure.Persistence.Repositories;
 
 // Implementación concreta del repositorio de ofertas usando EF Core + LINQ
-public class JobOfferRepository // : IJobOfferRepository
+public class JobOfferRepository : IJobOfferRepository
 {
-    // TODO: inyectar AppDbContext
+    public async Task<JobOffer?> GetByIdAsync(int id)
+    {
+        throw new NotImplementedException();
+    }
 
-    // TODO: GetByIdAsync → _context.JobOffers.Include(categorías).Include(skills)
-    //                                         .FirstOrDefaultAsync(o => o.Id == id)
+    public async Task<IEnumerable<JobOffer>> GetByCompanyAsync(int companyId)
+    {
+        throw new NotImplementedException();
+    }
 
-    // TODO: GetByCompanyAsync → _context.JobOffers
-    //                                    .Where(o => o.CompanyId == companyId)
-    //                                    .OrderByDescending(o => o.CreatedAt)
-    //                                    .ToListAsync()
+    public async Task<JobOffer> CreateAsync(JobOffer offer)
+    {
+        throw new NotImplementedException();
+    }
 
-    // TODO: CreateAsync → _context.JobOffers.Add(offer) + SaveChangesAsync
-    // TODO: UpdateAsync → _context.SaveChangesAsync
+    public async Task UpdateAsync(JobOffer offer)
+    {
+        throw new NotImplementedException();
+    }
 }

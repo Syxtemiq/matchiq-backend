@@ -1,17 +1,24 @@
+using MatchIQ.Application.Common.Interfaces;
+
 namespace MatchIQ.Infrastructure.Email;
 
 // Implementación de IEmailService usando MailKit
 // Ya lo conoces del proyecto ComplejoDeportivo
-public class MailKitEmailService // : IEmailService
+public class MailKitEmailService : IEmailService
 {
-    // TODO: inyectar IConfiguration para SMTP settings
 
-    // TODO: SendVerificationCodeAsync(string to, string code)
-    //       email con código de 6 dígitos, expira en 10 minutos
+    public async Task SendVerificationCodeAsync(string to, string code)
+    {
+        throw new NotImplementedException();
+    }
 
-    // TODO: SendPasswordResetAsync(string to, string resetLink)
+    public async Task SendPasswordResetAsync(string to, string resetLink)
+    {
+        throw new NotImplementedException();
+    }
 
-    // TODO: SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes)
-    //       notifica al candidato que fue seleccionado para presentar el test
-    //       incluye el tiempo límite disponible
+    public async Task SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes)
+    {
+        throw new NotImplementedException();
+    }
 }

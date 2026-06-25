@@ -1,13 +1,11 @@
+using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatchIQ.Infrastructure.Persistence;
 
-// DbContext principal de la aplicación
-// Configura todas las entidades, relaciones, enums y constraints
-// Los enums se guardan como strings en Postgres (HasConversion<string>)
-// El mapeo de tablas/columnas en snake_case y las constraints siguen 1 a 1 a DBContext.md
-public class AppDbContext : DbContext
+
+public class AppDbContext : DbContext, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
