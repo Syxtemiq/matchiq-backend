@@ -1,8 +1,12 @@
+using MatchIQ.Domain.Entities;
+using MatchIQ.Domain.Enums;
+using MatchIQ.Application.Common.Interfaces.Repositories;
+
 namespace MatchIQ.Infrastructure.Persistence.Repositories;
 
 // Implementación del repositorio de matches
 // Usa FromSqlRaw para llamar la función SQL get_candidate_matches(offer_id)
-public class MatchRepository // : IMatchRepository
+public class MatchRepository : IMatchRepository
 {
     // TODO: inyectar AppDbContext
 
@@ -17,4 +21,18 @@ public class MatchRepository // : IMatchRepository
     //                                  .OrderByDescending(m => m.MatchPercentage)
 
     // TODO: UpdateStageAsync → busca el match, cambia Stage, SaveChangesAsync
+    public async Task<IEnumerable<Match>> RunMatchingAsync(int offerId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<IEnumerable<Match>> GetByOfferAsync(int offerId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task UpdateStageAsync(int matchId, MatchStage stage)
+    {
+        throw new NotImplementedException();
+    }
 }

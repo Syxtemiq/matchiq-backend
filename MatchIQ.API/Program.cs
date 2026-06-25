@@ -1,8 +1,19 @@
-// MatchIQ API - Entry point
-// Configura todos los servicios, middlewares y la pipeline de la aplicación
-
+using MatchIQ.Application.Modules.Admin;
+using MatchIQ.Application.Modules.Auth;
+using MatchIQ.Application.Modules.Candidate;
+using MatchIQ.Application.Modules.Company;
+using MatchIQ.Application.Modules.Matching;
+using MatchIQ.Application.Modules.Offers;
+using MatchIQ.Application.Modules.Tests;
+using MatchIQ.Application.Common.Interfaces;
+using MatchIQ.Application.Common.Interfaces.Repositories;
+using MatchIQ.Infrastructure.Auth;
+using MatchIQ.Infrastructure.AI;
+using MatchIQ.Infrastructure.Email;
 using MatchIQ.Infrastructure.Persistence;
+using MatchIQ.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,29 +27,58 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // ── Inyección de dependencias ─────────────────────────────────────────────────
 // Application Services
-// TODO: builder.Services.AddScoped<AuthService>()
-// TODO: builder.Services.AddScoped<CandidateService>()
-// TODO: builder.Services.AddScoped<CompanyService>()
-// TODO: builder.Services.AddScoped<OffersService>()
-// TODO: builder.Services.AddScoped<MatchingService>()
-// TODO: builder.Services.AddScoped<TestService>()
-// TODO: builder.Services.AddScoped<TestEditorService>()
-// TODO: builder.Services.AddScoped<AdminService>()
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<CandidateService>();
+builder.Services.AddScoped<CompanyService>();
+builder.Services.AddScoped<OffersService>();
+builder.Services.AddScoped<MatchingService>();
+builder.Services.AddScoped<TestService>();
+builder.Services.AddScoped<TestEditorService>();
+builder.Services.AddScoped<AdminService>();
 
 // Infrastructure Services
-// TODO: builder.Services.AddScoped<IAIService, OpenAIService>()
-// TODO: builder.Services.AddScoped<IOfferParserService, OfferParserService>()
-// TODO: builder.Services.AddScoped<IEmailService, MailKitEmailService>()
-// TODO: builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>()
-// TODO: builder.Services.AddScoped<IMatchRepository, MatchRepository>()
-// TODO: builder.Services.AddScoped<ITestRepository, TestRepository>()
+builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<IAIService, OpenAIService>();
+builder.Services.AddScoped<IOfferParserService, OfferParserService>();
+builder.Services.AddScoped<IEmailService, MailKitEmailService>();
+builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
+builder.Services.AddScoped<IMatchRepository, MatchRepository>();
+builder.Services.AddScoped<ITestRepository, TestRepository>();
 
 // ── CORS para Flutter Web ─────────────────────────────────────────────────────
 // TODO: builder.Services.AddCors(options => { ... })
 
 // ── Swagger ───────────────────────────────────────────────────────────────────
-// TODO: builder.Services.AddEndpointsApiExplorer()
-// TODO: builder.Services.AddSwaggerGen()
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "MatchIQ API",
+        Version = "v1",
+        Description = "API para la plataforma de matching entre candidatos y empresas."
+    });
+
+    // Esquema de seguridad JWT Bearer
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Ingresa el token JWT. Ejemplo: Bearer {token}"
+    });
+
+    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecuritySchemeReference("Bearer", doc),
+            []
+        }
+    });
+});
 
 builder.Services.AddControllers();
 
@@ -50,7 +90,17 @@ var app = builder.Build();
 // TODO: app.UseCors(...)
 // TODO: app.UseAuthentication()
 // TODO: app.UseAuthorization()
-// TODO: app.UseSwagger() / app.UseSwaggerUI()
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
+        options.RoutePrefix = string.Empty; // Swagger en la raíz: http://localhost:{port}/
+    });
+}
+
 app.MapControllers();
 
 app.Run();

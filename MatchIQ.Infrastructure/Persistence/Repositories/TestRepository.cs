@@ -1,7 +1,10 @@
+using MatchIQ.Domain.Entities;
+using MatchIQ.Application.Common.Interfaces.Repositories;
+
 namespace MatchIQ.Infrastructure.Persistence.Repositories;
 
 // Implementación del repositorio de tests y preguntas
-public class TestRepository // : ITestRepository
+public class TestRepository : ITestRepository
 {
     // TODO: inyectar AppDbContext
 
@@ -21,4 +24,33 @@ public class TestRepository // : ITestRepository
     //                                      .ToListAsync()
 
     // TODO: AddChatMessageAsync → add + SaveChangesAsync
+    public async Task<Test?> GetByOfferIdAsync(int offerId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<Test> CreateAsync(Test test)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<TestQuestion?> GetQuestionByIdAsync(int questionId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task UpdateQuestionAsync(TestQuestion question)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task<IEnumerable<QuestionChatMessage>> GetChatHistoryAsync(int questionId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task AddChatMessageAsync(QuestionChatMessage message)
+    {
+        throw new NotImplementedException();
+    }
 }
