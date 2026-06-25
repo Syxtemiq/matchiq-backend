@@ -1,8 +1,12 @@
 namespace MatchIQ.Application.Modules.Offers.Dtos;
 
-// Campos editables de una oferta (solo si está en estado Open)
 public class UpdateOfferDto
 {
-    // TODO: Title?, Description?, Salary?, Modality?
-    // TODO: MinExperienceYears?, RequiredEnglishLevel?, PositionsAvailable?
+    public string? Title { get; set; }
+    public string? Description { get; set; }
+    public decimal? Salary { get; set; }
+    public string? Modality { get; set; }
+    public int? MinExperienceYears { get; set; }
+    public string? RequiredEnglishLevel { get; set; }
+    public int? PositionsAvailable { get; set; }
 }

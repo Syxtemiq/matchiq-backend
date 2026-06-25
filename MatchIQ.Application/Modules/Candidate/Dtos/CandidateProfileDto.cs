@@ -1,9 +1,19 @@
+using MatchIQ.Application.Modules.Catalog.Dtos;
+
 namespace MatchIQ.Application.Modules.Candidate.Dtos;
 
-// Perfil completo del candidato para mostrar en el frontend
 public class CandidateProfileDto
 {
-    // TODO: Id, Email, ExperienceYears, Seniority, EnglishLevel, GithubLink
-    // TODO: Categories (lista de CategoryDto)
-    // TODO: Skills (lista de SkillDto con nivel)
+    public int UserId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int? ExperienceYears { get; set; }
+    public string? Seniority { get; set; }
+    public string? EnglishLevel { get; set; }
+    public string? GithubLink { get; set; }
+    public string? LinkedinUrl { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
+    public bool ProfileCompleted { get; set; }
+    public List<CategoryDto> Categories { get; set; } = [];
+    public List<CandidateSkillDto> Skills { get; set; } = [];
 }

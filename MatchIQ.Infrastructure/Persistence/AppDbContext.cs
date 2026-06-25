@@ -51,14 +51,18 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.ToTable("users");
             e.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+            e.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(255);
+            e.Property(x => x.Cedula).HasColumnName("cedula").HasMaxLength(20);
             e.Property(x => x.PasswordHash).HasColumnName("password_hash");
             e.Property(x => x.Role).HasColumnName("role").HasConversion<string>().IsRequired();
             e.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            e.Property(x => x.EmailVerified).HasColumnName("email_verified").HasDefaultValue(false);
             e.Property(x => x.GoogleId).HasColumnName("google_id").HasMaxLength(255);
             e.Property(x => x.PictureUrl).HasColumnName("picture_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.Email).IsUnique();
+            e.HasIndex(x => x.Cedula).IsUnique().HasFilter("cedula IS NOT NULL");
             e.HasIndex(x => x.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
         });
 
@@ -127,6 +131,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Seniority).HasColumnName("seniority").HasConversion<string>();
             e.Property(x => x.EnglishLevel).HasColumnName("english_level").HasConversion<string>();
             e.Property(x => x.GithubLink).HasColumnName("github_link");
+            e.Property(x => x.LinkedinUrl).HasColumnName("linkedin_url");
             e.Property(x => x.ProfilePhotoUrl).HasColumnName("profile_photo_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 

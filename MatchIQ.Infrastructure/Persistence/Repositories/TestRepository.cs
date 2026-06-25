@@ -1,56 +1,51 @@
-using MatchIQ.Domain.Entities;
 using MatchIQ.Application.Common.Interfaces.Repositories;
+using MatchIQ.Domain.Entities;
+using MatchIQ.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace MatchIQ.Infrastructure.Persistence.Repositories;
 
-// Implementación del repositorio de tests y preguntas
 public class TestRepository : ITestRepository
 {
-    // TODO: inyectar AppDbContext
+    private readonly AppDbContext _context;
 
-    // TODO: GetByOfferIdAsync → _context.Tests
-    //                                    .Include(t => t.Questions)
-    //                                    .FirstOrDefaultAsync(t => t.OfferId == offerId)
-
-    // TODO: CreateAsync → add + SaveChangesAsync
-
-    // TODO: GetQuestionByIdAsync → _context.TestQuestions.FindAsync(id)
-
-    // TODO: UpdateQuestionAsync → SaveChangesAsync (la entidad ya está tracked por EF)
-
-    // TODO: GetChatHistoryAsync → _context.QuestionChatMessages
-    //                                      .Where(m => m.QuestionId == questionId)
-    //                                      .OrderBy(m => m.CreatedAt)
-    //                                      .ToListAsync()
-
-    // TODO: AddChatMessageAsync → add + SaveChangesAsync
-    public async Task<Test?> GetByOfferIdAsync(int offerId)
+    public TestRepository(AppDbContext context)
     {
-        throw new NotImplementedException();
+        _context = context;
     }
+
+    public async Task<Test?> GetByOfferIdAsync(int offerId) =>
+        await _context.Tests
+            .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
+            .FirstOrDefaultAsync(t => t.OfferId == offerId);
 
     public async Task<Test> CreateAsync(Test test)
     {
-        throw new NotImplementedException();
+        _context.Tests.Add(test);
+        await _context.SaveChangesAsync();
+        return test;
     }
 
-    public async Task<TestQuestion?> GetQuestionByIdAsync(int questionId)
-    {
-        throw new NotImplementedException();
-    }
+    public async Task<TestQuestion?> GetQuestionByIdAsync(int questionId) =>
+        await _context.TestQuestions
+            .Include(q => q.QuestionChatMessages.OrderBy(m => m.CreatedAt))
+            .FirstOrDefaultAsync(q => q.Id == questionId);
 
     public async Task UpdateQuestionAsync(TestQuestion question)
     {
-        throw new NotImplementedException();
+        question.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
     }
 
-    public async Task<IEnumerable<QuestionChatMessage>> GetChatHistoryAsync(int questionId)
-    {
-        throw new NotImplementedException();
-    }
+    public async Task<IEnumerable<QuestionChatMessage>> GetChatHistoryAsync(int questionId) =>
+        await _context.QuestionChatMessages
+            .Where(m => m.QuestionId == questionId)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
 
     public async Task AddChatMessageAsync(QuestionChatMessage message)
     {
-        throw new NotImplementedException();
+        _context.QuestionChatMessages.Add(message);
+        await _context.SaveChangesAsync();
     }
 }

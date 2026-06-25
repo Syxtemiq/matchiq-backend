@@ -1,3 +1,4 @@
+using System.Text;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
@@ -12,18 +13,44 @@ using MatchIQ.Infrastructure.AI;
 using MatchIQ.Infrastructure.Email;
 using MatchIQ.Infrastructure.Persistence;
 using MatchIQ.Infrastructure.Persistence.Repositories;
+using MatchIQ.API.Middlewares;
+using MatchIQ.API.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using OpenAI.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ── Base de datos ─────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ── Autenticación JWT + Google OAuth ─────────────────────────────────────────
-// TODO: builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-//           .AddJwtBearer(options => { ... })
-//           .AddGoogle(options => { ... })
+// ── Autenticación JWT ─────────────────────────────────────────────────────────
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer              = builder.Configuration["Jwt:Issuer"],
+            ValidAudience            = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey         = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// ── OpenAI SDK ────────────────────────────────────────────────────────────────
+builder.Services.AddOpenAIService(settings =>
+{
+    settings.ApiKey = builder.Configuration["OpenAI:ApiKey"]!;
+});
 
 // ── Inyección de dependencias ─────────────────────────────────────────────────
 // Application Services
@@ -37,6 +64,7 @@ builder.Services.AddScoped<TestEditorService>();
 builder.Services.AddScoped<AdminService>();
 
 // Infrastructure Services
+builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IAIService, OpenAIService>();
@@ -46,8 +74,17 @@ builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<ITestRepository, TestRepository>();
 
+// Current user (lectura de claims del JWT via IHttpContextAccessor)
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
 // ── CORS para Flutter Web ─────────────────────────────────────────────────────
-// TODO: builder.Services.AddCors(options => { ... })
+// TODO: configurar origins reales cuando se tenga la URL del frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FlutterWeb", policy =>
+        policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+});
 
 // ── Swagger ───────────────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
@@ -60,7 +97,6 @@ builder.Services.AddSwaggerGen(options =>
         Description = "API para la plataforma de matching entre candidatos y empresas."
     });
 
-    // Esquema de seguridad JWT Bearer
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -85,11 +121,7 @@ builder.Services.AddControllers();
 var app = builder.Build();
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
-// TODO: app.UseMiddleware<ErrorHandlingMiddleware>()
-// TODO: app.UseMiddleware<CurrentUserMiddleware>()
-// TODO: app.UseCors(...)
-// TODO: app.UseAuthentication()
-// TODO: app.UseAuthorization()
+app.UseMiddleware<ErrorHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -97,10 +129,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
-        options.RoutePrefix = string.Empty; // Swagger en la raíz: http://localhost:{port}/
+        options.RoutePrefix = string.Empty;
     });
 }
 
+app.UseCors("FlutterWeb");
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

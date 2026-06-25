@@ -1,7 +1,13 @@
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
-// Datos para registrar un nuevo usuario
 public class RegisterDto
 {
-    // TODO: Email, Password, Role (candidate | company)
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Cedula { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string ConfirmPassword { get; set; } = string.Empty;
+    public UserRole Role { get; set; }
 }

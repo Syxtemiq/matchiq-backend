@@ -12,7 +12,8 @@ public class CandidateProfile
     public Seniority? Seniority { get; set; }
     public EnglishLevel? EnglishLevel { get; set; }
     public string? GithubLink { get; set; }
-    public string? ProfilePhotoUrl { get; set; } // URL del storage externo (S3/Cloudinary/Azure Blob)
+    public string? LinkedinUrl { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public User User { get; set; } = null!;

@@ -1,8 +1,13 @@
 namespace MatchIQ.Application.Modules.Candidate.Dtos;
 
-// Datos para actualizar el perfil del candidato
 public class UpdateCandidateDto
 {
-    // TODO: ExperienceYears, Seniority, EnglishLevel, GithubLink
-    // TODO: CategoryIds (int[]), SkillIds con nivel (lista de SkillLevelDto)
+    public int? ExperienceYears { get; set; }
+    public string? Seniority { get; set; }
+    public string? EnglishLevel { get; set; }
+    public string? GithubLink { get; set; }
+    public string? LinkedinUrl { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
+    public List<int> CategoryIds { get; set; } = [];
+    public List<SkillLevelDto> Skills { get; set; } = [];
 }
