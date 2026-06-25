@@ -2,5 +2,6 @@ namespace MatchIQ.Application.Modules.Auth.Dtos;
 
 public class LoginDto
 {
-    // TODO: Email, Password
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
 }

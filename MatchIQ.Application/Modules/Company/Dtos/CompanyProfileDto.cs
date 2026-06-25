@@ -2,5 +2,10 @@ namespace MatchIQ.Application.Modules.Company.Dtos;
 
 public class CompanyProfileDto
 {
-    // TODO: Id, CompanyName, Email, CreatedAt
+    public int UserId { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? CompanyName { get; set; }
+    public bool ProfileCompleted { get; set; }
+    public DateTime CreatedAt { get; set; }
 }

@@ -18,10 +18,10 @@ public class JwtService : IJwtService
 
     public JwtService(IConfiguration config)
     {
-        _secret = config["Jwt:Secret"]!;
+        _secret = config["Jwt:Key"]!;
         _issuer = config["Jwt:Issuer"]!;
         _audience = config["Jwt:Audience"]!;
-        _expiresMinutes = int.Parse(config["Jwt:ExpiresMinutes"] ?? "60");
+        _expiresMinutes = int.Parse(config["Jwt:AccessTokenExpirationMinutes"] ?? "60");
     }
 
     public string GenerateAccessToken(User user)
