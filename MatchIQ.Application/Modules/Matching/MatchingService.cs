@@ -34,13 +34,20 @@ public class MatchingService
 
     // Corre la función SQL de matching y enriquece el top 3 con insight de IA.
     // Llamado internamente al activar una oferta (webhook de Stripe) o manualmente.
-    public async Task<List<MatchResultDto>> RunMatchingAsync(int offerId)
+    public async Task<List<MatchResultDto>> RunMatchingAsync(int offerId, int userId)
     {
         var offer = await _context.JobOffers
             .Include(o => o.OfferSkills)
             .Include(o => o.OfferCategories)
             .FirstOrDefaultAsync(o => o.Id == offerId)
             ?? throw new KeyNotFoundException("Oferta no encontrada.");
+
+        var company = await _context.CompanyProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de empresa no encontrado.");
+
+        if (offer.CompanyId != company.Id)
+            throw new UnauthorizedAccessException("No tienes acceso a esta oferta.");
 
         if (offer.Status != OfferStatus.Open)
             throw new InvalidOperationException("El matching solo se puede ejecutar sobre ofertas en estado Open.");

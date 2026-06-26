@@ -24,7 +24,7 @@ public class MatchingController : ControllerBase
     [HttpPost("{offerId:int}/run")]
     public async Task<IActionResult> RunMatching(int offerId)
     {
-        var matches = await _matchingService.RunMatchingAsync(offerId);
+        var matches = await _matchingService.RunMatchingAsync(offerId, _currentUser.UserId);
         return Ok(ApiResponse.Ok(matches));
     }
 
