@@ -27,19 +27,15 @@
 
 ## Gaps de UX / flujo
 
-### 🟡 Ver resumen del test sin iniciarlo (candidato)
-Actualmente `GET /api/tests/{offerId}/candidate` registra `StartedAt` en el primer acceso, iniciando el contador de tiempo. El candidato no puede "ver qué le espera" sin consumir su tiempo.
+### ✅ Ver resumen del test sin iniciarlo (candidato) — RESUELTO
+- `GET /api/tests/{offerId}/candidate/preview` → devuelve `TestPreviewDto` (título, tiempo límite, conteo por tipo). No toca `StartedAt`.
+- `POST /api/tests/{offerId}/candidate/start` → registra `StartedAt` y devuelve las preguntas sin respuestas correctas.
+- El endpoint anterior `GET /api/tests/{offerId}/candidate` fue eliminado.
 
-**Solución:** separar en dos endpoints:
-- `GET /api/tests/{offerId}/candidate/preview` — devuelve título, tiempo límite, número de preguntas y tipos (sin contenido). No toca `StartedAt`.
-- `POST /api/tests/{offerId}/candidate/start` — inicia el test formalmente: registra `StartedAt` y devuelve las preguntas sin respuestas correctas.
-
-Esto requiere un `TestPreviewDto` nuevo. No rompe nada existente.
-
-### 🟡 Email al candidato cuando es seleccionado
-Hay email de invitación al test, pero no hay notificación cuando la empresa lo selecciona como finalista. Es el momento más importante del flujo para el candidato.
-
-**Solución:** en `MatchingService.SelectCandidateAsync`, después de guardar, enviar un email al candidato con `IEmailService`. Requiere un nuevo método `SendSelectionNotificationAsync` en la interfaz y su implementación en `MailKitEmailService`.
+### ✅ Email al candidato cuando es seleccionado o rechazado — RESUELTO
+- `SelectCandidateAsync` → `SendCandidateSelectedAsync` (email de felicitación, best-effort)
+- `RejectCandidateAsync` → `SendCandidateRejectedAsync` (email empático con invitación a actualizar perfil, best-effort)
+- Ambos métodos agregados a `IEmailService` e implementados en `MailKitEmailService`.
 
 ---
 
@@ -78,5 +74,5 @@ Ningún DTO tiene validaciones. Requests malformados generan 500 en lugar de 400
 - Actualizar `API_REFERENCE.md` con los endpoints nuevos:
   - `POST /api/auth/resend-verification`
   - `POST /api/admin/users` (crear admin)
-  - `GET /api/tests/{offerId}/candidate/preview` (cuando se implemente)
-  - `POST /api/tests/{offerId}/candidate/start` (cuando se implemente)
+  - `GET /api/tests/{offerId}/candidate/preview` ✅ documentado
+  - `POST /api/tests/{offerId}/candidate/start` ✅ documentado

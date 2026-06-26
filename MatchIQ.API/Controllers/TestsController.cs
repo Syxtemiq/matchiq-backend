@@ -69,11 +69,19 @@ public class TestsController : ControllerBase
 
     // ── Candidato ─────────────────────────────────────────────────────────────────
 
-    [HttpGet("{offerId:int}/candidate")]
+    [HttpGet("{offerId:int}/candidate/preview")]
     [Authorize(Roles = "Candidate")]
-    public async Task<IActionResult> GetTestForCandidate(int offerId)
+    public async Task<IActionResult> GetTestPreview(int offerId)
     {
-        var test = await _testService.GetTestForCandidateAsync(offerId, _currentUser.UserId);
+        var preview = await _testService.GetTestPreviewAsync(offerId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(preview));
+    }
+
+    [HttpPost("{offerId:int}/candidate/start")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> StartTest(int offerId)
+    {
+        var test = await _testService.StartTestAsync(offerId, _currentUser.UserId);
         return Ok(ApiResponse.Ok(test));
     }
 

@@ -34,13 +34,20 @@ public class MatchingService
 
     // Corre la función SQL de matching y enriquece el top 3 con insight de IA.
     // Llamado internamente al activar una oferta (webhook de Stripe) o manualmente.
-    public async Task<List<MatchResultDto>> RunMatchingAsync(int offerId)
+    public async Task<List<MatchResultDto>> RunMatchingAsync(int offerId, int userId)
     {
         var offer = await _context.JobOffers
             .Include(o => o.OfferSkills)
             .Include(o => o.OfferCategories)
             .FirstOrDefaultAsync(o => o.Id == offerId)
             ?? throw new KeyNotFoundException("Oferta no encontrada.");
+
+        var company = await _context.CompanyProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de empresa no encontrado.");
+
+        if (offer.CompanyId != company.Id)
+            throw new UnauthorizedAccessException("No tienes acceso a esta oferta.");
 
         if (offer.Status != OfferStatus.Open)
             throw new InvalidOperationException("El matching solo se puede ejecutar sobre ofertas en estado Open.");
@@ -253,6 +260,7 @@ public class MatchingService
     public async Task RejectCandidateAsync(int userId, int matchId)
     {
         var match = await _context.Matches
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.JobOffer)
             .FirstOrDefaultAsync(m => m.Id == matchId)
             ?? throw new KeyNotFoundException("Match no encontrado.");
@@ -275,6 +283,16 @@ public class MatchingService
         match.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _emailService.SendCandidateRejectedAsync(
+                match.CandidateProfile.User.Email,
+                match.CandidateProfile.User.FullName ?? match.CandidateProfile.User.Email,
+                match.JobOffer.Title,
+                _frontendUrl);
+        }
+        catch { /* best-effort: el rechazo ya se guardó */ }
     }
 
     public async Task<MatchResultDto> SelectCandidateAsync(int userId, int matchId)
@@ -283,6 +301,7 @@ public class MatchingService
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateSkills).ThenInclude(cs => cs.Skill)
             .Include(m => m.JobOffer).ThenInclude(o => o.OfferSkills)
+            .Include(m => m.JobOffer).ThenInclude(o => o.CompanyProfile)
             .FirstOrDefaultAsync(m => m.Id == matchId)
             ?? throw new KeyNotFoundException("Match no encontrado.");
 
@@ -312,6 +331,17 @@ public class MatchingService
         }
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _emailService.SendCandidateSelectedAsync(
+                match.CandidateProfile.User.Email,
+                match.CandidateProfile.User.FullName ?? match.CandidateProfile.User.Email,
+                match.JobOffer.Title,
+                match.JobOffer.CompanyProfile.CompanyName ?? "la empresa",
+                _frontendUrl);
+        }
+        catch { /* best-effort: la selección ya se guardó */ }
 
         var offerSkillIds = match.JobOffer.OfferSkills.Select(os => os.SkillId).ToHashSet();
         return MapToDto(match, offerSkillIds);

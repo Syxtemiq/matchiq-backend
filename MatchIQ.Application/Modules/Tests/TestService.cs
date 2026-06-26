@@ -77,7 +77,7 @@ public class TestService
         return MapToDto(test, includeAnswers: true);
     }
 
-    public async Task<TestDto> GetTestForCandidateAsync(int offerId, int userId)
+    public async Task<TestPreviewDto> GetTestPreviewAsync(int offerId, int userId)
     {
         var test = await _testRepository.GetByOfferIdAsync(offerId)
             ?? throw new KeyNotFoundException("Test no encontrado.");
@@ -96,7 +96,36 @@ public class TestService
         if (submission.Status == SubmissionStatus.Evaluated)
             throw new InvalidOperationException("Ya enviaste tus respuestas. Espera los resultados.");
 
-        // Registrar el momento en que el candidato abrió el test
+        return new TestPreviewDto
+        {
+            TestId = test.Id,
+            Title = test.Title,
+            TimeLimitMinutes = test.TimeLimitMinutes,
+            TotalQuestions = test.TestQuestions.Count,
+            MultipleChoiceCount = test.TestQuestions.Count(q => q.QuestionType == QuestionType.MultipleChoice),
+            CodeChallengeCount = test.TestQuestions.Count(q => q.QuestionType == QuestionType.CodeChallenge)
+        };
+    }
+
+    public async Task<TestDto> StartTestAsync(int offerId, int userId)
+    {
+        var test = await _testRepository.GetByOfferIdAsync(offerId)
+            ?? throw new KeyNotFoundException("Test no encontrado.");
+
+        var candidateProfile = await _context.CandidateProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de candidato no encontrado.");
+
+        var submission = await _context.TestSubmissions
+            .FirstOrDefaultAsync(s => s.TestId == test.Id && s.CandidateId == candidateProfile.Id)
+            ?? throw new UnauthorizedAccessException("No estás invitado a rendir este test.");
+
+        if (submission.Status == SubmissionStatus.Expired)
+            throw new InvalidOperationException("El plazo para rendir este test ha expirado.");
+
+        if (submission.Status == SubmissionStatus.Evaluated)
+            throw new InvalidOperationException("Ya enviaste tus respuestas. Espera los resultados.");
+
         if (submission.StartedAt is null)
         {
             submission.StartedAt = DateTime.UtcNow;
