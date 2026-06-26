@@ -1,5 +1,6 @@
 using MatchIQ.API.Common;
 using MatchIQ.Application.Modules.Admin;
+using MatchIQ.Application.Modules.Admin.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,6 +16,13 @@ public class AdminController : ControllerBase
     public AdminController(AdminService adminService)
     {
         _adminService = adminService;
+    }
+
+    [HttpPost("users")]
+    public async Task<IActionResult> CreateAdmin([FromBody] CreateAdminDto dto)
+    {
+        var user = await _adminService.CreateAdminAsync(dto);
+        return Ok(ApiResponse.Ok(user, "Administrador creado correctamente."));
     }
 
     [HttpGet("users")]
