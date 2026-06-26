@@ -64,6 +64,14 @@ public class MatchRepository : IMatchRepository
             .OrderByDescending(m => m.AdjustedScore ?? m.MatchPercentage)
             .ToListAsync();
 
+    public async Task ReevaluateAllAsync(int offerId)
+    {
+        // get_full_offer_ranking hace UPSERT de todos los candidatos activos en matches.
+        // Actualiza match_percentage para existentes, inserta nuevos. Nunca toca stage.
+        await _context.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT candidate_id FROM get_full_offer_ranking({offerId})");
+    }
+
     public async Task UpdateStageAsync(int matchId, MatchStage stage)
     {
         var match = await _context.Matches.FindAsync(matchId)

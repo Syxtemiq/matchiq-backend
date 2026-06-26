@@ -1,21 +1,150 @@
+using MatchIQ.Application.Common.Interfaces;
+using MatchIQ.Application.Modules.Admin.Dtos;
+using MatchIQ.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
 namespace MatchIQ.Application.Modules.Admin;
 
-// Operaciones del superadmin del sistema
-// Equivalente a admin.service.js del backend Node
 public class AdminService
 {
-    // TODO: inyectar AppDbContext
+    private readonly IAppDbContext _context;
 
-    // TODO: GetAllUsersAsync()
-    //       lista todos los usuarios con su rol y estado
+    public AdminService(IAppDbContext context)
+    {
+        _context = context;
+    }
 
-    // TODO: ToggleUserStatusAsync(int userId)
-    //       activa o desactiva una cuenta (is_active)
+    public async Task<List<UserSummaryDto>> GetAllUsersAsync(string? role = null, bool? isActive = null)
+    {
+        var query = _context.Users
+            .Include(u => u.CompanyProfile)
+            .AsQueryable();
 
-    // TODO: DeleteUserAsync(int userId)
-    //       elimina un usuario y su perfil en cascada
+        if (role is not null && Enum.TryParse<UserRole>(role, ignoreCase: true, out var parsedRole))
+            query = query.Where(u => u.Role == parsedRole);
 
-    // TODO: GetStatsAsync()
-    //       estadísticas generales: total candidatos, empresas, ofertas, matches
+        if (isActive.HasValue)
+            query = query.Where(u => u.IsActive == isActive.Value);
+
+        var users = await query
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync();
+
+        return users.Select(u => new UserSummaryDto
+        {
+            Id = u.Id,
+            Email = u.Email,
+            FullName = u.FullName,
+            Cedula = u.Cedula,
+            Role = u.Role.ToString(),
+            IsActive = u.IsActive,
+            EmailVerified = u.EmailVerified,
+            CreatedAt = u.CreatedAt,
+            ProfileName = u.Role == UserRole.Company ? u.CompanyProfile?.CompanyName : null
+        }).ToList();
+    }
+
+    public async Task<UserSummaryDto> GetUserByIdAsync(int userId)
+    {
+        var user = await _context.Users
+            .Include(u => u.CompanyProfile)
+            .FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new KeyNotFoundException($"Usuario {userId} no encontrado.");
+
+        return new UserSummaryDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FullName = user.FullName,
+            Cedula = user.Cedula,
+            Role = user.Role.ToString(),
+            IsActive = user.IsActive,
+            EmailVerified = user.EmailVerified,
+            CreatedAt = user.CreatedAt,
+            ProfileName = user.Role == UserRole.Company ? user.CompanyProfile?.CompanyName : null
+        };
+    }
+
+    public async Task<UserSummaryDto> ToggleUserStatusAsync(int userId)
+    {
+        var user = await _context.Users
+            .Include(u => u.CompanyProfile)
+            .FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new KeyNotFoundException($"Usuario {userId} no encontrado.");
+
+        if (user.Role == UserRole.Admin)
+            throw new InvalidOperationException("No se puede desactivar la cuenta de un administrador.");
+
+        user.IsActive = !user.IsActive;
+        await _context.SaveChangesAsync();
+
+        return new UserSummaryDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FullName = user.FullName,
+            Cedula = user.Cedula,
+            Role = user.Role.ToString(),
+            IsActive = user.IsActive,
+            EmailVerified = user.EmailVerified,
+            CreatedAt = user.CreatedAt,
+            ProfileName = user.Role == UserRole.Company ? user.CompanyProfile?.CompanyName : null
+        };
+    }
+
+    public async Task DeleteUserAsync(int userId)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new KeyNotFoundException($"Usuario {userId} no encontrado.");
+
+        if (user.Role == UserRole.Admin)
+            throw new InvalidOperationException("No se puede eliminar la cuenta de un administrador.");
+
+        _context.Users.Remove(user);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<SystemStatsDto> GetStatsAsync()
+    {
+        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+
+        var totalCandidates = await _context.Users.CountAsync(u => u.Role == UserRole.Candidate);
+        var totalCompanies = await _context.Users.CountAsync(u => u.Role == UserRole.Company);
+        var totalOffers = await _context.JobOffers.CountAsync();
+        var totalMatches = await _context.Matches.CountAsync();
+
+        var activeTests = await _context.TestSubmissions
+            .Where(s => s.Status == SubmissionStatus.Pending)
+            .Select(s => s.TestId)
+            .Distinct()
+            .CountAsync();
+
+        var pendingSubmissions = await _context.TestSubmissions
+            .CountAsync(s => s.Status == SubmissionStatus.Pending);
+
+        var offersByStatus = await _context.JobOffers
+            .GroupBy(o => o.Status)
+            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
+            .ToListAsync();
+
+        var usersLast30Days = await _context.Users
+            .CountAsync(u => u.CreatedAt >= thirtyDaysAgo);
+
+        var offersLast30Days = await _context.JobOffers
+            .CountAsync(o => o.CreatedAt >= thirtyDaysAgo);
+
+        return new SystemStatsDto
+        {
+            TotalCandidates = totalCandidates,
+            TotalCompanies = totalCompanies,
+            TotalOffers = totalOffers,
+            TotalMatches = totalMatches,
+            ActiveTests = activeTests,
+            PendingSubmissions = pendingSubmissions,
+            OffersByStatus = offersByStatus.ToDictionary(x => x.Status, x => x.Count),
+            UsersRegisteredLast30Days = usersLast30Days,
+            OffersCreatedLast30Days = offersLast30Days
+        };
+    }
 }
-

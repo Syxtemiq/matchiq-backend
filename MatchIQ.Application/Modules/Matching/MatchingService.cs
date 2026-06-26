@@ -6,6 +6,7 @@ using MatchIQ.Application.Modules.Matching.Dtos;
 using MatchIQ.Domain.Entities;
 using MatchIQ.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace MatchIQ.Application.Modules.Matching;
 
@@ -15,17 +16,20 @@ public class MatchingService
     private readonly IMatchRepository _matchRepository;
     private readonly IAIService _aiService;
     private readonly IEmailService _emailService;
+    private readonly string _frontendUrl;
 
     public MatchingService(
         IAppDbContext context,
         IMatchRepository matchRepository,
         IAIService aiService,
-        IEmailService emailService)
+        IEmailService emailService,
+        IConfiguration configuration)
     {
         _context = context;
         _matchRepository = matchRepository;
         _aiService = aiService;
         _emailService = emailService;
+        _frontendUrl = configuration["App:FrontendUrl"]?.TrimEnd('/') ?? "";
     }
 
     // Corre la función SQL de matching y enriquece el top 3 con insight de IA.
@@ -130,7 +134,6 @@ public class MatchingService
 
         foreach (var match in matches)
         {
-            // Crear la submission para que el candidato pueda responder
             var existingSubmission = await _context.TestSubmissions
                 .AnyAsync(s => s.TestId == offer.Test.Id && s.CandidateId == match.CandidateId);
 
@@ -147,11 +150,6 @@ public class MatchingService
 
             match.Stage = MatchStage.TestSent;
             match.UpdatedAt = DateTime.UtcNow;
-
-            await _emailService.SendTestInvitationAsync(
-                match.CandidateProfile.User.Email,
-                offer.Title,
-                offer.Test.TimeLimitMinutes);
         }
 
         // Activar el estado TestSent en la oferta (solo la primera vez)
@@ -160,6 +158,121 @@ public class MatchingService
             offer.Status = OfferStatus.TestSent;
             offer.TestSentAt = DateTime.UtcNow;
         }
+
+        // Guardar primero — si el correo falla, la submission ya existe en BD
+        await _context.SaveChangesAsync();
+
+        // Enviar correos con link directo al test (best-effort: un fallo no revierte la operación)
+        var loginUrl = $"{_frontendUrl}/login?next=test/{offer.Id}";
+        foreach (var match in matches)
+        {
+            try
+            {
+                await _emailService.SendTestInvitationAsync(
+                    match.CandidateProfile.User.Email,
+                    offer.Title,
+                    offer.Test.TimeLimitMinutes,
+                    loginUrl);
+            }
+            catch
+            {
+                // No propagar: la submission ya está creada, el candidato puede ver el test al ingresar
+            }
+        }
+    }
+
+    public async Task<List<MatchResultDto>> ReevaluateAsync(int offerId, int userId)
+    {
+        var offer = await _context.JobOffers
+            .Include(o => o.OfferSkills).ThenInclude(os => os.Skill)
+            .Include(o => o.OfferCategories).ThenInclude(oc => oc.Category)
+            .FirstOrDefaultAsync(o => o.Id == offerId)
+            ?? throw new KeyNotFoundException("Oferta no encontrada.");
+
+        var company = await _context.CompanyProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de empresa no encontrado.");
+
+        if (offer.CompanyId != company.Id)
+            throw new UnauthorizedAccessException("No tienes acceso a esta oferta.");
+
+        if (offer.Status != OfferStatus.Open)
+            throw new InvalidOperationException("Solo se puede reevaluar una oferta en estado Open.");
+
+        // Recalcula porcentajes de TODOS los candidatos (incluyendo los que ya tenían match)
+        await _matchRepository.ReevaluateAllAsync(offerId);
+
+        // Recargar todos los matches con sus datos
+        var allMatches = await _context.Matches
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateSkills).ThenInclude(cs => cs.Skill)
+            .Where(m => m.OfferId == offerId)
+            .ToListAsync();
+
+        // Los que ya tienen feedback de IA: recalcular adjusted_score con el nuevo
+        // match_percentage sin volver a llamar a la IA (el fit cualitativo no cambia)
+        foreach (var match in allMatches.Where(m => m.AiFeedback is not null))
+        {
+            try
+            {
+                var insight = JsonSerializer.Deserialize<CandidateInsightDto>(match.AiFeedback!);
+                if (insight is not null)
+                {
+                    match.AdjustedScore = Math.Min(100,
+                        0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                    match.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            catch { }
+        }
+
+        // Top 3 sin feedback de IA: evaluar con IA por primera vez
+        var top3New = allMatches
+            .Where(m => m.AiFeedback is null)
+            .OrderByDescending(m => m.MatchPercentage)
+            .Take(3)
+            .ToList();
+
+        foreach (var match in top3New)
+        {
+            try
+            {
+                var insight = await _aiService.EvaluateCandidateAsync(offer, match);
+                match.AdjustedScore = Math.Min(100,
+                    0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                match.AiFeedback = JsonSerializer.Serialize(insight);
+                match.UpdatedAt = DateTime.UtcNow;
+            }
+            catch { }
+        }
+
+        await _context.SaveChangesAsync();
+        return await LoadMatchDtosAsync(offerId);
+    }
+
+    public async Task RejectCandidateAsync(int userId, int matchId)
+    {
+        var match = await _context.Matches
+            .Include(m => m.JobOffer)
+            .FirstOrDefaultAsync(m => m.Id == matchId)
+            ?? throw new KeyNotFoundException("Match no encontrado.");
+
+        var company = await _context.CompanyProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de empresa no encontrado.");
+
+        if (match.JobOffer.CompanyId != company.Id)
+            throw new UnauthorizedAccessException("No tienes acceso a este match.");
+
+        if (match.Stage == MatchStage.Selected)
+            throw new InvalidOperationException("No se puede rechazar un candidato que ya fue seleccionado.");
+
+        if (match.Stage == MatchStage.Rejected)
+            throw new InvalidOperationException("El candidato ya fue rechazado.");
+
+        // Se permite rechazar desde: Matched, TestSent, TestCompleted
+        match.Stage = MatchStage.Rejected;
+        match.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
     }

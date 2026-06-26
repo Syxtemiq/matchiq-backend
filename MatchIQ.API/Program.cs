@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
@@ -11,8 +12,10 @@ using MatchIQ.Application.Common.Interfaces.Repositories;
 using MatchIQ.Infrastructure.Auth;
 using MatchIQ.Infrastructure.AI;
 using MatchIQ.Infrastructure.Email;
+using MatchIQ.Infrastructure.Payments;
 using MatchIQ.Infrastructure.Persistence;
 using MatchIQ.Infrastructure.Persistence.Repositories;
+using MatchIQ.API.BackgroundServices;
 using MatchIQ.API.Middlewares;
 using MatchIQ.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -46,6 +49,50 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+// ── Rate Limiting ─────────────────────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Login, register, forgot-password, reset-password: 5 intentos/min por IP
+    options.AddPolicy("auth-strict", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            Window      = TimeSpan.FromMinutes(1),
+            PermitLimit = 5,
+            QueueLimit  = 0
+        });
+    });
+
+    // Verify-email, refresh, google-login: 15 intentos/min por IP
+    options.AddPolicy("auth-general", context =>
+    {
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new FixedWindowRateLimiterOptions
+        {
+            Window      = TimeSpan.FromMinutes(1),
+            PermitLimit = 15,
+            QueueLimit  = 0
+        });
+    });
+
+    // Pagos: 5 intentos/5min por usuario autenticado (o IP si no hay token)
+    options.AddPolicy("payment", context =>
+    {
+        var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                  ?? context.Connection.RemoteIpAddress?.ToString()
+                  ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            Window      = TimeSpan.FromMinutes(5),
+            PermitLimit = 5,
+            QueueLimit  = 0
+        });
+    });
+});
+
 // ── OpenAI SDK ────────────────────────────────────────────────────────────────
 builder.Services.AddOpenAIService(settings =>
 {
@@ -70,6 +117,8 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IAIService, OpenAIService>();
 builder.Services.AddScoped<IOfferParserService, OfferParserService>();
 builder.Services.AddScoped<IEmailService, MailKitEmailService>();
+builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
+builder.Services.AddHttpClient<IPaymentService, WompiService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<ITestRepository, TestRepository>();
@@ -77,6 +126,9 @@ builder.Services.AddScoped<ITestRepository, TestRepository>();
 // Current user (lectura de claims del JWT via IHttpContextAccessor)
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Background jobs diarios
+builder.Services.AddHostedService<DailyJobsService>();
 
 // ── CORS para Flutter Web ─────────────────────────────────────────────────────
 // TODO: configurar origins reales cuando se tenga la URL del frontend
@@ -134,6 +186,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("FlutterWeb");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

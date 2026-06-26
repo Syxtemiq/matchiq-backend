@@ -4,5 +4,5 @@ public interface IEmailService
 {
     Task SendVerificationCodeAsync(string to, string code);
     Task SendPasswordResetAsync(string to, string resetLink);
-    Task SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes);
+    Task SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes, string loginUrl);
 }

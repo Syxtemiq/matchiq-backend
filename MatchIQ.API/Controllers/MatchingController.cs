@@ -49,4 +49,18 @@ public class MatchingController : ControllerBase
         var match = await _matchingService.SelectCandidateAsync(_currentUser.UserId, matchId);
         return Ok(match);
     }
+
+    [HttpPost("{offerId:int}/reevaluate")]
+    public async Task<IActionResult> Reevaluate(int offerId)
+    {
+        var matches = await _matchingService.ReevaluateAsync(offerId, _currentUser.UserId);
+        return Ok(matches);
+    }
+
+    [HttpPost("{matchId:int}/reject")]
+    public async Task<IActionResult> RejectCandidate(int matchId)
+    {
+        await _matchingService.RejectCandidateAsync(_currentUser.UserId, matchId);
+        return NoContent();
+    }
 }

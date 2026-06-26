@@ -14,19 +14,22 @@ public class AuthService
     private readonly IEmailService _emailService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IConfiguration _config;
+    private readonly IGoogleTokenValidator _googleValidator;
 
     public AuthService(
         IAppDbContext context,
         IJwtService jwtService,
         IEmailService emailService,
         IPasswordHasher passwordHasher,
-        IConfiguration config)
+        IConfiguration config,
+        IGoogleTokenValidator googleValidator)
     {
         _context = context;
         _jwtService = jwtService;
         _emailService = emailService;
         _passwordHasher = passwordHasher;
         _config = config;
+        _googleValidator = googleValidator;
     }
 
     public async Task RegisterAsync(RegisterDto dto)
@@ -182,6 +185,57 @@ public class AuthService
         resetToken.Used = true;
 
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginDto dto)
+    {
+        if (dto.Role == UserRole.Admin)
+            throw new InvalidOperationException("No se puede registrar un administrador con Google.");
+
+        var googleUser = await _googleValidator.ValidateAsync(dto.IdToken);
+
+        // 1. Buscar usuario por GoogleId
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.GoogleId == googleUser.GoogleId);
+
+        // 2. Si no existe por GoogleId, buscar por email
+        if (user is null)
+        {
+            user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == googleUser.Email.ToLower());
+
+            if (user is not null)
+            {
+                // Cuenta existente (email/password) — vincular GoogleId
+                user.GoogleId = googleUser.GoogleId;
+                if (user.PictureUrl is null)
+                    user.PictureUrl = googleUser.PictureUrl;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // 3. Si no existe en absoluto, crear nuevo usuario
+        if (user is null)
+        {
+            user = new User
+            {
+                Email = googleUser.Email.ToLower().Trim(),
+                FullName = googleUser.Name,
+                GoogleId = googleUser.GoogleId,
+                PictureUrl = googleUser.PictureUrl,
+                Role = dto.Role,
+                IsActive = true,
+                EmailVerified = true  // Google ya verificó el email
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+        }
+
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("Tu cuenta está desactivada. Contacta al soporte.");
+
+        return await BuildAuthResponseAsync(user);
     }
 
     public async Task LogoutAsync(string refreshToken)

@@ -129,6 +129,19 @@ public class TestService
             .FirstOrDefaultAsync(t => t.Id == testId)
             ?? throw new KeyNotFoundException("Test no encontrado.");
 
+        // Verificar límite de tiempo desde que el candidato inició el test
+        if (submission.StartedAt.HasValue)
+        {
+            var elapsed = DateTime.UtcNow - submission.StartedAt.Value;
+            if (elapsed.TotalMinutes > test.TimeLimitMinutes)
+            {
+                submission.Status = SubmissionStatus.Expired;
+                await _context.SaveChangesAsync();
+                throw new InvalidOperationException(
+                    $"Tiempo agotado. El test debía completarse en {test.TimeLimitMinutes} minutos.");
+            }
+        }
+
         submission.AnswersJson = JsonSerializer.Serialize(dto.Answers);
         submission.SubmittedAt = DateTime.UtcNow;
 
