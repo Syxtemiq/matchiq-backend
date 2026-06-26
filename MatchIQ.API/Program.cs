@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using MatchIQ.Domain.Enums;
 using Npgsql;
@@ -190,6 +191,10 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    })
     .ConfigureApiBehaviorOptions(options =>
     {
         // Unifica los errores de validación de DTOs con el mismo ApiResponse<T>

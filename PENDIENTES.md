@@ -11,7 +11,7 @@
 
 ---
 
-## Gaps de seguridad
+## Gaps de seguridad 
 
 ### 🟠 Google OAuth no valida audience
 `GoogleTokenValidator` verifica que el token sea válido con Google, pero no verifica que el `aud` del token coincida con el `Google:ClientId` configurado en `appsettings.json`. Un token generado por cualquier otra app de Google pasaría la validación.
@@ -41,13 +41,23 @@
 
 ## Gaps de lógica de negocio
 
-### 🟡 Dos condiciones distintas para cerrar una oferta
-- `SelectCandidateAsync` en C# cierra la oferta cuando se llenan las `PositionsAvailable`.
-- `check_offer_completion()` en SQL cierra cuando todas las submissions quedan `Evaluated` o `Expired`.
+### ✅ Lógica de cierre de oferta unificada — RESUELTO
+**Decisión:** la oferta cierra SOLO cuando la empresa selecciona suficientes candidatos para
+llenar todas las posiciones (`SelectCandidateAsync`). Las submissions expiradas/evaluadas
+no cierran la oferta.
 
-Son condiciones distintas y ambas están activas. Pueden entrar en conflicto.
+**Cambios aplicados:**
+- `check_offer_completion()` SQL eliminada — ya no se llama desde ningún lado.
+- `trg_fn_submission_evaluated` trigger SQL eliminado — ya no cierra la oferta al evaluar.
+- `expire_stale_submissions()` simplificada — solo expira submissions, sin tocar el estado de la oferta.
+- `SelectCandidateAsync` en C# permanece como el único mecanismo de cierre.
 
-**Decisión pendiente:** definir cuál es la condición real de cierre y desactivar la otra.
+**Script a correr en BD existente (una sola vez):**
+```sql
+DROP TRIGGER IF EXISTS trg_submission_evaluated ON test_submissions;
+DROP FUNCTION IF EXISTS trg_fn_submission_evaluated();
+DROP FUNCTION IF EXISTS check_offer_completion(INTEGER);
+```
 
 ### ⚪ `ai_feedback` queda obsoleto al editar la oferta
 Si la empresa edita los skills requeridos después de que la IA evaluó candidatos, el análisis cualitativo guardado en `ai_feedback` queda desactualizado aunque el score numérico se recalcule con `ReevaluateAsync`.
