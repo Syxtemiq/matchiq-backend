@@ -2,6 +2,7 @@ using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Auth.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MatchIQ.API.Controllers;
 
@@ -16,6 +17,7 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    [EnableRateLimiting("auth-strict")]
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
@@ -23,6 +25,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Registro exitoso. Revisa tu email e ingresa el código de verificación." });
     }
 
+    [EnableRateLimiting("auth-general")]
     [HttpPost("verify-email")]
     public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailDto dto)
     {
@@ -30,6 +33,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Email verificado. Ya puedes iniciar sesión y completar tu perfil." });
     }
 
+    [EnableRateLimiting("auth-strict")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
@@ -37,6 +41,7 @@ public class AuthController : ControllerBase
         return Ok(response);
     }
 
+    [EnableRateLimiting("auth-general")]
     [HttpPost("refresh")]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequestDto dto)
     {
@@ -44,6 +49,7 @@ public class AuthController : ControllerBase
         return Ok(response);
     }
 
+    [EnableRateLimiting("auth-strict")]
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
@@ -51,11 +57,20 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Si el email existe, recibirás un enlace para restablecer tu contraseña." });
     }
 
+    [EnableRateLimiting("auth-strict")]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
         await _authService.ResetPasswordAsync(dto);
         return Ok(new { message = "Contraseña actualizada correctamente." });
+    }
+
+    [EnableRateLimiting("auth-general")]
+    [HttpPost("google")]
+    public async Task<IActionResult> LoginWithGoogle([FromBody] GoogleLoginDto dto)
+    {
+        var response = await _authService.LoginWithGoogleAsync(dto);
+        return Ok(response);
     }
 
     [Authorize]

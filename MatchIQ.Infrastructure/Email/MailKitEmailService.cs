@@ -65,17 +65,34 @@ public class MailKitEmailService : IEmailService
         await SendAsync(to, subject, html);
     }
 
-    public async Task SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes)
+    public async Task SendTestInvitationAsync(string to, string offerTitle, int timeLimitMinutes, string loginUrl)
     {
-        var subject = $"Tienes un test técnico — {offerTitle}";
+        var subject = $"Fuiste seleccionado para un test técnico — {offerTitle}";
         var html = $"""
-            <div style="font-family:sans-serif;max-width:480px;margin:auto">
-              <h2 style="color:#1a1a2e">Test técnico disponible</h2>
-              <p>Has sido seleccionado para completar el test técnico de la oferta:</p>
-              <p style="font-weight:bold;font-size:18px">{offerTitle}</p>
-              <p>Tienes <strong>{timeLimitMinutes} minutos</strong> para completarlo
-                 una vez que lo inicies.</p>
-              <p>Ingresa a la plataforma para comenzar.</p>
+            <div style="font-family:sans-serif;max-width:520px;margin:auto;color:#1a1a2e">
+              <h2 style="color:#1a1a2e">¡Felicitaciones! Fuiste seleccionado</h2>
+              <p>Una empresa revisó tu perfil en <strong>MatchIQ</strong> y te seleccionó
+                 para presentar el test técnico de la siguiente oferta:</p>
+              <p style="font-weight:bold;font-size:18px;background:#f4f4f4;
+                        padding:12px 16px;border-radius:6px;margin:16px 0">
+                {offerTitle}
+              </p>
+              <p>⏱ Tendrás <strong>{timeLimitMinutes} minutos</strong> para completarlo
+                 una vez que lo inicies, así que asegúrate de tener tiempo disponible
+                 antes de comenzar.</p>
+              <p>Haz clic en el botón para ingresar a la plataforma e iniciar tu test:</p>
+              <a href="{loginUrl}"
+                 style="display:inline-block;background:#4f46e5;color:#fff;
+                        padding:14px 32px;border-radius:8px;text-decoration:none;
+                        font-weight:bold;font-size:16px;margin:16px 0">
+                Ir a mi test
+              </a>
+              <p style="color:#888;font-size:13px;margin-top:24px">
+                Si no puedes hacer clic en el botón, copia este enlace en tu navegador:<br>
+                <span style="color:#4f46e5">{loginUrl}</span>
+              </p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+              <p style="color:#aaa;font-size:12px">MatchIQ — Plataforma de matching para desarrolladores</p>
             </div>
             """;
 

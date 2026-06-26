@@ -303,8 +303,8 @@ public class AppDbContext : DbContext, IAppDbContext
             e.ToTable("payments");
             e.Property(x => x.OfferId).HasColumnName("offer_id").IsRequired();
             e.Property(x => x.TierId).HasColumnName("tier_id").IsRequired();
-            e.Property(x => x.StripePaymentIntentId).HasColumnName("stripe_payment_intent_id").HasMaxLength(255);
-            e.Property(x => x.StripeCheckoutSessionId).HasColumnName("stripe_checkout_session_id").HasMaxLength(255);
+            e.Property(x => x.PaymentTransactionId).HasColumnName("payment_transaction_id").HasMaxLength(255);
+            e.Property(x => x.PaymentCheckoutId).HasColumnName("payment_checkout_id").HasMaxLength(255);
             e.Property(x => x.AmountCop).HasColumnName("amount_cop").HasPrecision(12, 2).IsRequired();
             e.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasDefaultValue(Domain.Enums.PaymentStatus.Pending);
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
@@ -312,8 +312,8 @@ public class AppDbContext : DbContext, IAppDbContext
 
             e.HasIndex(x => x.OfferId).IsUnique().HasDatabaseName("idx_payments_offer_id");
             e.HasIndex(x => x.Status).HasDatabaseName("idx_payments_status");
-            e.HasIndex(x => x.StripePaymentIntentId).IsUnique().HasDatabaseName("idx_payments_stripe_intent");
-            e.HasIndex(x => x.StripeCheckoutSessionId).IsUnique();
+            e.HasIndex(x => x.PaymentTransactionId).IsUnique().HasDatabaseName("idx_payments_transaction_id");
+            e.HasIndex(x => x.PaymentCheckoutId).IsUnique();
 
             e.HasOne(x => x.JobOffer)
                 .WithOne(jo => jo.Payment)
