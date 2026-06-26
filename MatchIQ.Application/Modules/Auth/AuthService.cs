@@ -100,6 +100,39 @@ public class AuthService
         await _context.SaveChangesAsync();
     }
 
+    public async Task ResendVerificationAsync(ResendVerificationDto dto)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email == dto.Email.ToLower().Trim());
+
+        // No revelamos si el email existe (anti-enumeración)
+        if (user is null) return;
+
+        if (user.EmailVerified)
+            throw new InvalidOperationException("Este email ya fue verificado. Puedes iniciar sesión.");
+
+        // Invalida todos los códigos anteriores pendientes
+        var oldCodes = await _context.EmailVerifications
+            .Where(v => v.UserId == user.Id && !v.Used)
+            .ToListAsync();
+
+        foreach (var old in oldCodes)
+            old.Used = true;
+
+        // Genera y envía un código nuevo
+        var code = GenerateSixDigitCode();
+        _context.EmailVerifications.Add(new EmailVerification
+        {
+            UserId = user.Id,
+            Code = code,
+            Used = false,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+        });
+
+        await _context.SaveChangesAsync();
+        await _emailService.SendVerificationCodeAsync(user.Email, code);
+    }
+
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
         var user = await _context.Users

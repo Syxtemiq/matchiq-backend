@@ -35,6 +35,14 @@ public class AuthController : ControllerBase
     }
 
     [EnableRateLimiting("auth-strict")]
+    [HttpPost("resend-verification")]
+    public async Task<IActionResult> ResendVerification([FromBody] ResendVerificationDto dto)
+    {
+        await _authService.ResendVerificationAsync(dto);
+        return Ok(ApiResponse.Ok("Si el email existe y no está verificado, recibirás un nuevo código."));
+    }
+
+    [EnableRateLimiting("auth-strict")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
