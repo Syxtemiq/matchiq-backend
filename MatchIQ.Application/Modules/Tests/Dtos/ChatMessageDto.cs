@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MatchIQ.Application.Modules.Tests.Dtos;
 
 public class ChatMessageDto
@@ -9,5 +11,6 @@ public class ChatMessageDto
 
 public class SendChatMessageDto
 {
+    [Required]
     public string Message { get; set; } = string.Empty;
 }
