@@ -220,15 +220,12 @@ var app = builder.Build();
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
-        options.RoutePrefix = string.Empty;
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
+    options.RoutePrefix = string.Empty;
+});
 
 app.UseCors("FlutterWeb");
 app.UseRateLimiter();
