@@ -260,6 +260,7 @@ public class MatchingService
     public async Task RejectCandidateAsync(int userId, int matchId)
     {
         var match = await _context.Matches
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.JobOffer)
             .FirstOrDefaultAsync(m => m.Id == matchId)
             ?? throw new KeyNotFoundException("Match no encontrado.");
@@ -282,6 +283,16 @@ public class MatchingService
         match.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _emailService.SendCandidateRejectedAsync(
+                match.CandidateProfile.User.Email,
+                match.CandidateProfile.User.FullName ?? match.CandidateProfile.User.Email,
+                match.JobOffer.Title,
+                _frontendUrl);
+        }
+        catch { /* best-effort: el rechazo ya se guardó */ }
     }
 
     public async Task<MatchResultDto> SelectCandidateAsync(int userId, int matchId)
@@ -290,6 +301,7 @@ public class MatchingService
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateSkills).ThenInclude(cs => cs.Skill)
             .Include(m => m.JobOffer).ThenInclude(o => o.OfferSkills)
+            .Include(m => m.JobOffer).ThenInclude(o => o.CompanyProfile)
             .FirstOrDefaultAsync(m => m.Id == matchId)
             ?? throw new KeyNotFoundException("Match no encontrado.");
 
@@ -319,6 +331,17 @@ public class MatchingService
         }
 
         await _context.SaveChangesAsync();
+
+        try
+        {
+            await _emailService.SendCandidateSelectedAsync(
+                match.CandidateProfile.User.Email,
+                match.CandidateProfile.User.FullName ?? match.CandidateProfile.User.Email,
+                match.JobOffer.Title,
+                match.JobOffer.CompanyProfile.CompanyName ?? "la empresa",
+                _frontendUrl);
+        }
+        catch { /* best-effort: la selección ya se guardó */ }
 
         var offerSkillIds = match.JobOffer.OfferSkills.Select(os => os.SkillId).ToHashSet();
         return MapToDto(match, offerSkillIds);

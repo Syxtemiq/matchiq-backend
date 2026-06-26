@@ -12,53 +12,40 @@
 
 ## Formato de respuesta (SIEMPRE el mismo)
 
-Todos los endpoints devuelven este contrato sin excepción:
+Todos los endpoints devuelven este contrato sin excepción — incluyendo errores de validación:
 
 ```json
-{
-  "success": true,
-  "data": { },
-  "message": null
-}
+{ "success": true,  "data": { },   "message": null }
+{ "success": true,  "data": null,  "message": "Operación exitosa." }
+{ "success": false, "data": null,  "message": "Descripción del error." }
 ```
 
-```json
-{
-  "success": false,
-  "data": null,
-  "message": "Descripción del error"
-}
-```
+**Regla en Flutter:** checa `success` primero. Si es `true`, usa `data` (o `message` si `data` es null). Si es `false`, muestra `message` al usuario.
 
-**Regla en Flutter:** checa `success` primero. Si es `true`, usa `data`. Si es `false`, muestra `message` al usuario.
-
-### Códigos HTTP que puede devolver
+### Códigos HTTP posibles
 
 | Código | Cuándo |
 |---|---|
 | `200` | Éxito |
-| `400` | Error de negocio (input inválido, estado incorrecto, etc.) |
+| `400` | Input inválido, regla de negocio violada, estado incorrecto |
 | `401` | Sin token, token expirado, o sin permiso de rol |
 | `404` | Recurso no encontrado |
-| `429` | Rate limit excedido |
+| `429` | Rate limit excedido — esperar al menos 60 segundos antes de reintentar |
 | `500` | Error interno del servidor |
 
 ---
 
-## Valores válidos para campos de tipo enum
+## Valores válidos para campos enum
 
-Estos son los únicos valores aceptados en los campos de texto que representan enums:
-
-| Campo | Valores válidos |
+| Campo | Valores aceptados |
 |---|---|
-| `role` (al registrar) | `0` = Admin, `1` = Candidate, `2` = Company |
-| `modality` | `"remote"`, `"onsite"`, `"hybrid"` |
-| `englishLevel` | `"A1"`, `"A2"`, `"B1"`, `"B2"`, `"C1"`, `"C2"` |
-| `seniority` | `"junior"`, `"mid"`, `"senior"` |
-| `offerStatus` | `"PendingPayment"`, `"Open"`, `"TestSent"`, `"Completed"`, `"Cancelled"`, `"Expired"` |
-| `matchStage` | `"Matched"`, `"TestSent"`, `"TestCompleted"`, `"Selected"`, `"Rejected"` |
-| `submissionStatus` | `"Pending"`, `"Evaluated"`, `"Expired"` |
-| `questionType` | `"MultipleChoice"`, `"CodeChallenge"` |
+| `role` (al registrar / Google login) | `1` = Candidate · `2` = Company |
+| `modality` | `"remote"` · `"onsite"` · `"hybrid"` |
+| `englishLevel` / `requiredEnglishLevel` | `"A1"` · `"A2"` · `"B1"` · `"B2"` · `"C1"` · `"C2"` |
+| `seniority` | `"junior"` · `"mid"` · `"senior"` |
+| `selectedOption` (respuesta test) | `"A"` · `"B"` · `"C"` · `"D"` |
+
+> Los enums en las **respuestas** vienen como strings: `"stage": "Matched"`, `"status": "Open"`, etc.
 
 ---
 
@@ -81,7 +68,7 @@ Base path: `/api/auth`
 ---
 
 ### 1. Registrar usuario
-`POST /api/auth/register` · 🔓 Público
+`POST /api/auth/register` · 🔓 Público · ⚡ 5 req/min por IP
 
 **Body:**
 ```json
@@ -89,26 +76,41 @@ Base path: `/api/auth`
   "fullName": "Juan Pérez",
   "email": "juan@email.com",
   "cedula": "1234567890",
-  "password": "MiPassword123",
-  "confirmPassword": "MiPassword123",
+  "password": "MiPass.123",
+  "confirmPassword": "MiPass.123",
   "role": 1
 }
 ```
-> `role`: `1` = Candidate, `2` = Company
+
+| Campo | Reglas |
+|---|---|
+| `fullName` | Requerido |
+| `email` | Requerido · formato email válido |
+| `cedula` | Requerido |
+| `password` | Requerido · mínimo 8 caracteres · debe incluir al menos una mayúscula, una minúscula, un número y un carácter especial (`.` cuenta) |
+| `confirmPassword` | Requerido · debe ser idéntico a `password` |
+| `role` | `1` (Candidate) o `2` (Company) — no se acepta `0` (Admin) |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Registro exitoso. Revisa tu email e ingresa el código de verificación."
-}
+{ "success": true, "data": null, "message": "Registro exitoso. Revisa tu email e ingresa el código de verificación." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Las contraseñas no coinciden."` |
+| 400 | `"La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial."` |
+| 400 | `"El campo Email no es una dirección de correo electrónico válida."` |
+| 400 | `"El email ya está registrado."` |
+| 400 | `"La cédula ya está registrada."` |
+| 400 | `"No se puede registrar un administrador."` |
 
 ---
 
 ### 2. Verificar email
-`POST /api/auth/verify-email` · 🔓 Público
+`POST /api/auth/verify-email` · 🔓 Público · ⚡ 15 req/min por IP
 
 **Body:**
 ```json
@@ -117,29 +119,72 @@ Base path: `/api/auth`
   "code": "482910"
 }
 ```
-> El código llega al email del usuario. Expira en 10 minutos.
+
+| Campo | Reglas |
+|---|---|
+| `email` | Requerido · formato email válido |
+| `code` | Requerido · exactamente 6 dígitos numéricos · expira en 10 minutos |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Email verificado. Ya puedes iniciar sesión y completar tu perfil."
-}
+{ "success": true, "data": null, "message": "Email verificado. Ya puedes iniciar sesión y completar tu perfil." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El código debe ser de 6 dígitos."` |
+| 400 | `"Este email ya fue verificado. Puedes iniciar sesión."` |
+| 400 | `"Código inválido o expirado."` |
+| 404 | `"Usuario no encontrado."` |
 
 ---
 
-### 3. Iniciar sesión
-`POST /api/auth/login` · 🔓 Público
+### 3. Reenviar código de verificación
+`POST /api/auth/resend-verification` · 🔓 Público · ⚡ 5 req/min por IP
+
+Genera un nuevo código de 6 dígitos e invalida el anterior. Responde igual aunque el email no exista (por seguridad).
+
+**Body:**
+```json
+{
+  "email": "juan@email.com"
+}
+```
+
+| Campo | Reglas |
+|---|---|
+| `email` | Requerido · formato email válido |
+
+**Respuesta exitosa:**
+```json
+{ "success": true, "data": null, "message": "Si el email existe y no está verificado, recibirás un nuevo código." }
+```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El campo Email no es una dirección de correo electrónico válida."` |
+
+---
+
+### 4. Iniciar sesión
+`POST /api/auth/login` · 🔓 Público · ⚡ 5 req/min por IP
 
 **Body:**
 ```json
 {
   "email": "juan@email.com",
-  "password": "MiPassword123"
+  "password": "MiPass.123"
 }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `email` | Requerido · formato email válido |
+| `password` | Requerido |
 
 **Respuesta exitosa:**
 ```json
@@ -156,26 +201,43 @@ Base path: `/api/auth`
   "message": null
 }
 ```
-> Guarda `accessToken` y `refreshToken` en almacenamiento seguro. El `accessToken` dura **15 minutos**. El `refreshToken` dura **7 días**.
+> `accessToken` dura **60 minutos**. `refreshToken` dura **7 días**. Guardar ambos en almacenamiento seguro.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Credenciales inválidas."` |
+| 400 | `"Debes verificar tu email antes de iniciar sesión."` |
+| 400 | `"Tu cuenta está desactivada. Contacta al soporte."` |
 
 ---
 
-### 4. Renovar token
-`POST /api/auth/refresh` · 🔓 Público
+### 5. Renovar token
+`POST /api/auth/refresh` · 🔓 Público · ⚡ 15 req/min por IP
 
 **Body:**
 ```json
-{
-  "refreshToken": "d3f8a2..."
-}
+{ "refreshToken": "d3f8a2..." }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `refreshToken` | Requerido |
 
 **Respuesta exitosa:** igual a login — devuelve nuevos `accessToken` y `refreshToken`.
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Refresh token inválido o expirado."` |
+| 400 | `"Tu cuenta está desactivada."` |
+
 ---
 
-### 5. Login con Google
-`POST /api/auth/google` · 🔓 Público
+### 6. Login con Google
+`POST /api/auth/google` · 🔓 Público · ⚡ 15 req/min por IP
 
 **Body:**
 ```json
@@ -184,73 +246,93 @@ Base path: `/api/auth`
   "role": 1
 }
 ```
-> `role` solo aplica si el usuario es nuevo. Para usuarios existentes se ignora.
+
+| Campo | Reglas |
+|---|---|
+| `idToken` | Requerido · token de Google válido |
+| `role` | Solo aplica si el usuario es nuevo — `1` (Candidate) o `2` (Company). Para usuarios existentes se ignora |
 
 **Respuesta exitosa:** igual a login.
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Token de Google inválido: ..."` |
+| 400 | `"No se puede registrar un administrador con Google."` |
+| 400 | `"Tu cuenta está desactivada. Contacta al soporte."` |
+
 ---
 
-### 6. Olvidé mi contraseña
-`POST /api/auth/forgot-password` · 🔓 Público
+### 7. Olvidé mi contraseña
+`POST /api/auth/forgot-password` · 🔓 Público · ⚡ 5 req/min por IP
+
+Siempre responde igual aunque el email no exista (por seguridad).
 
 **Body:**
 ```json
-{
-  "email": "juan@email.com"
-}
+{ "email": "juan@email.com" }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `email` | Requerido · formato email válido |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Si el email existe, recibirás un enlace para restablecer tu contraseña."
-}
+{ "success": true, "data": null, "message": "Si el email existe, recibirás un enlace para restablecer tu contraseña." }
 ```
 
 ---
 
-### 7. Restablecer contraseña
-`POST /api/auth/reset-password` · 🔓 Público
+### 8. Restablecer contraseña
+`POST /api/auth/reset-password` · 🔓 Público · ⚡ 5 req/min por IP
 
 **Body:**
 ```json
 {
   "token": "token_del_link_del_email",
-  "newPassword": "NuevoPassword123",
-  "confirmPassword": "NuevoPassword123"
+  "newPassword": "NuevoPass.123",
+  "confirmPassword": "NuevoPass.123"
 }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `token` | Requerido |
+| `newPassword` | Requerido · mismas reglas de complejidad que `password` en registro |
+| `confirmPassword` | Requerido · debe ser idéntico a `newPassword` |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Contraseña actualizada correctamente."
-}
+{ "success": true, "data": null, "message": "Contraseña actualizada correctamente." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Las contraseñas no coinciden."` |
+| 400 | `"La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial."` |
+| 404 | `"El enlace de recuperación es inválido o ya expiró."` |
 
 ---
 
-### 8. Cerrar sesión
+### 9. Cerrar sesión
 `POST /api/auth/logout` · 🔐 JWT
 
 **Body:**
 ```json
-{
-  "refreshToken": "d3f8a2..."
-}
+{ "refreshToken": "d3f8a2..." }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `refreshToken` | Requerido |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Sesión cerrada."
-}
+{ "success": true, "data": null, "message": "Sesión cerrada." }
 ```
 
 ---
@@ -260,11 +342,12 @@ Base path: `/api/auth`
 # MÓDULO: CATÁLOGO
 
 Base path: `/api/catalog`
-> Cargar esto al iniciar la app. Se usa para poblar los selectores de categorías y skills.
+
+> Cargar al iniciar la app y cachear localmente — los datos no cambian con frecuencia.
 
 ---
 
-### 9. Listar categorías
+### 10. Listar categorías
 `GET /api/catalog/categories` · 🔓 Público
 
 **Respuesta exitosa:**
@@ -286,7 +369,7 @@ Base path: `/api/catalog`
 
 ---
 
-### 10. Skills por categoría
+### 11. Skills por categoría
 `GET /api/catalog/categories/{categoryId}/skills` · 🔓 Público
 
 **Respuesta exitosa:**
@@ -301,6 +384,8 @@ Base path: `/api/catalog`
 }
 ```
 
+> **Flujo esperado:** cuando el usuario selecciona una categoría, llamar este endpoint para mostrar sus skills disponibles.
+
 ---
 
 ---
@@ -311,7 +396,7 @@ Base path: `/api/candidate`
 
 ---
 
-### 11. Ver mi perfil
+### 12. Ver mi perfil
 `GET /api/candidate/profile` · 👤 Candidate
 
 **Respuesta exitosa:**
@@ -333,13 +418,7 @@ Base path: `/api/candidate`
       { "id": 1, "name": "FrontEnd" }
     ],
     "skills": [
-      {
-        "skillId": 1,
-        "skillName": "React",
-        "categoryId": 1,
-        "categoryName": "FrontEnd",
-        "level": 4
-      }
+      { "skillId": 1, "skillName": "React", "categoryId": 1, "categoryName": "FrontEnd", "level": 4 }
     ]
   },
   "message": null
@@ -348,8 +427,10 @@ Base path: `/api/candidate`
 
 ---
 
-### 12. Actualizar mi perfil
+### 13. Actualizar mi perfil
 `PUT /api/candidate/profile` · 👤 Candidate
+
+Todos los campos son opcionales. Al actualizar, el sistema re-evalúa automáticamente al candidato contra todas las ofertas abiertas.
 
 **Body:**
 ```json
@@ -367,10 +448,27 @@ Base path: `/api/candidate`
   ]
 }
 ```
-> Todos los campos son opcionales. `level` va de **1 a 5**.
-> Al actualizar el perfil, el sistema re-evalúa automáticamente el candidato contra todas las ofertas abiertas.
+
+| Campo | Reglas |
+|---|---|
+| `experienceYears` | Opcional · entero ≥ 0 |
+| `seniority` | Opcional · `"junior"`, `"mid"` o `"senior"` |
+| `englishLevel` | Opcional · `"A1"`, `"A2"`, `"B1"`, `"B2"`, `"C1"` o `"C2"` |
+| `githubLink` / `linkedinUrl` / `profilePhotoUrl` | Opcional · string libre |
+| `categoryIds` | Opcional · lista de IDs de categoría |
+| `skills[].skillId` | Entero positivo |
+| `skills[].level` | Entero entre 1 y 5 |
 
 **Respuesta exitosa:** devuelve el perfil completo igual que GET.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El seniority debe ser junior, mid o senior."` |
+| 400 | `"El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2."` |
+| 400 | `"El nivel del skill debe estar entre 1 y 5."` |
+| 400 | `"Los años de experiencia no pueden ser negativos."` |
 
 ---
 
@@ -382,7 +480,7 @@ Base path: `/api/company`
 
 ---
 
-### 13. Ver mi perfil de empresa
+### 14. Ver mi perfil de empresa
 `GET /api/company/profile` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -403,15 +501,17 @@ Base path: `/api/company`
 
 ---
 
-### 14. Actualizar perfil de empresa
+### 15. Actualizar perfil de empresa
 `PUT /api/company/profile` · 🏢 Company
 
 **Body:**
 ```json
-{
-  "companyName": "Tech Solutions SAS"
-}
+{ "companyName": "Tech Solutions SAS" }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `companyName` | Requerido |
 
 **Respuesta exitosa:** devuelve el perfil completo.
 
@@ -425,7 +525,7 @@ Base path: `/api/offers`
 
 ---
 
-### 15. Ver tiers de precio
+### 16. Ver tiers de precio
 `GET /api/offers/tiers` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -444,17 +544,19 @@ Base path: `/api/offers`
 
 ---
 
-### 16. Parsear descripción con IA (paso opcional antes de crear)
+### 17. Parsear descripción con IA
 `POST /api/offers/parse-description` · 🏢 Company
 
-La empresa pega una descripción libre del cargo y la IA extrae los campos. Útil para pre-llenar el formulario de creación.
+La empresa escribe una descripción libre del cargo y la IA extrae los campos. Útil para pre-llenar el formulario de creación.
 
 **Body:**
 ```json
-{
-  "rawDescription": "Buscamos un desarrollador React con 2 años de experiencia, inglés B2, trabajo remoto..."
-}
+{ "rawDescription": "Buscamos un desarrollador React con 2 años de experiencia, inglés B2, trabajo remoto..." }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `rawDescription` | Requerido |
 
 **Respuesta exitosa:**
 ```json
@@ -473,12 +575,20 @@ La empresa pega una descripción libre del cargo y la IA extrae los campos. Úti
   "message": null
 }
 ```
-> Muestra los campos pre-llenados y editables. El usuario confirma antes de crear la oferta.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"La descripción no puede estar vacía."` |
+| 400 | `"Debes completar tu perfil de empresa antes de crear una oferta."` |
 
 ---
 
-### 17. Crear oferta
+### 18. Crear oferta
 `POST /api/offers` · 🏢 Company
+
+La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pagar (ver `/api/payments/create-checkout`).
 
 **Body:**
 ```json
@@ -495,7 +605,19 @@ La empresa pega una descripción libre del cargo y la IA extrae los campos. Úti
   "skillIds": [4, 9, 10]
 }
 ```
-> La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pagar (ver `/api/payments/create-checkout`).
+
+| Campo | Reglas |
+|---|---|
+| `title` | Requerido |
+| `description` | Opcional |
+| `salary` | Opcional · número ≥ 0 |
+| `modality` | Requerido · `"remote"`, `"onsite"` o `"hybrid"` |
+| `minExperienceYears` | Opcional · entero ≥ 0 |
+| `requiredEnglishLevel` | Opcional · `"A1"` – `"C2"` |
+| `positionsAvailable` | Entero ≥ 1 (default: 1) |
+| `tierId` | Requerido · entero positivo |
+| `categoryIds` | Opcional · lista de IDs de categoría |
+| `skillIds` | Opcional · lista de IDs de skill |
 
 **Respuesta exitosa:**
 ```json
@@ -518,36 +640,55 @@ La empresa pega una descripción libre del cargo y la IA extrae los campos. Úti
     "createdAt": "2026-06-25T14:00:00Z",
     "paidAt": null,
     "expiresAt": null,
-    "categories": [ { "id": 1, "name": "FrontEnd" } ],
-    "skills": [ { "id": 4, "name": "React", "categoryId": 1 } ],
+    "testSentAt": null,
+    "categories": [{ "id": 1, "name": "FrontEnd" }],
+    "skills": [{ "id": 4, "name": "React", "categoryId": 1 }],
     "checkoutUrl": null
   },
   "message": "Oferta creada correctamente."
 }
 ```
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"La modalidad debe ser remote, onsite o hybrid."` |
+| 400 | `"El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2."` |
+| 400 | `"Debe haber al menos 1 posición disponible."` |
+| 400 | `"Debes completar tu perfil de empresa antes de crear una oferta."` |
+| 400 | `"Debes completar el nombre de la empresa antes de crear una oferta."` |
+| 404 | `"Tier de precios no encontrado o inactivo."` |
+
 ---
 
-### 18. Ver mis ofertas
+### 19. Ver mis ofertas
 `GET /api/offers` · 🏢 Company
 
 **Respuesta exitosa:** `data` es una lista de objetos con la misma forma que en "Crear oferta".
 
 ---
 
-### 19. Ver una oferta
+### 20. Ver una oferta
 `GET /api/offers/{id}` · 🏢 Company
 
 **Respuesta exitosa:** `data` es el objeto de la oferta.
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 404 | `"Oferta no encontrada."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+
 ---
 
-### 20. Editar oferta
+### 21. Editar oferta
 `PUT /api/offers/{id}` · 🏢 Company
 
-Solo se pueden editar ofertas en estado `PendingPayment` o `Open`.
+Solo se pueden editar ofertas en estado `Open`. Todos los campos son opcionales — solo se actualizan los que se envíen.
 
-**Body:** todos los campos son opcionales:
+**Body:**
 ```json
 {
   "title": "Nuevo título",
@@ -560,11 +701,32 @@ Solo se pueden editar ofertas en estado `PendingPayment` o `Open`.
 }
 ```
 
+| Campo | Reglas |
+|---|---|
+| `title` | Opcional · si se envía, no puede ser vacío |
+| `salary` | Opcional · número ≥ 0 |
+| `modality` | Opcional · `"remote"`, `"onsite"` o `"hybrid"` |
+| `minExperienceYears` | Opcional · entero ≥ 0 |
+| `requiredEnglishLevel` | Opcional · `"A1"` – `"C2"` |
+| `positionsAvailable` | Opcional · entero ≥ 1 |
+
 **Respuesta exitosa:** devuelve la oferta actualizada.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Solo se pueden editar ofertas en estado Open."` |
+| 400 | `"El título no puede estar vacío."` |
+| 400 | `"La modalidad debe ser remote, onsite o hybrid."` |
+| 400 | `"El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2."` |
+| 400 | `"El número de posiciones debe ser al menos 1."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
-### 21. Cancelar oferta
+### 22. Cancelar oferta
 `PATCH /api/offers/{id}/cancel` · 🏢 Company
 
 **Sin body.**
@@ -581,11 +743,20 @@ Solo se pueden editar ofertas en estado `PendingPayment` o `Open`.
   "message": "Oferta cancelada correctamente."
 }
 ```
-> Si `warning` no es null, muestra una confirmación al usuario antes de llamar este endpoint.
+> Si `warning` no es null, muéstrale una confirmación al usuario. Si confirma, llamar `force-cancel`.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se puede cancelar una oferta completada."` |
+| 400 | `"La oferta ya está cancelada."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
-### 22. Forzar cancelación
+### 23. Forzar cancelación
 `POST /api/offers/{id}/force-cancel` · 🏢 Company
 
 Cancela aunque haya candidatos en proceso. Llamar solo si el usuario confirmó la advertencia del endpoint anterior.
@@ -594,11 +765,7 @@ Cancela aunque haya candidatos en proceso. Llamar solo si el usuario confirmó l
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Oferta forzada a cancelar correctamente."
-}
+{ "success": true, "data": null, "message": "Oferta forzada a cancelar correctamente." }
 ```
 
 ---
@@ -611,31 +778,25 @@ Base path: `/api/payments`
 
 ---
 
-### 23. Crear link de pago
-`POST /api/payments/create-checkout?offerId=7` · 🏢 Company
+### 24. Crear link de pago
+`POST /api/payments/create-checkout?offerId=7` · 🏢 Company · ⚡ 5 req/5min por usuario
 
 La oferta debe estar en estado `PendingPayment`. Si ya se generó un link antes, devuelve el mismo (idempotente).
 
-**Sin body** — el `offerId` va en el query string.
+**Sin body** — `offerId` va en el query string.
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": {
-    "url": "https://checkout.wompi.co/l/..."
-  },
-  "message": null
-}
+{ "success": true, "data": { "url": "https://checkout.wompi.co/l/..." }, "message": null }
 ```
-> Redirige al usuario a esa URL. Wompi se encarga del resto. Al pagar, el webhook activa la oferta automáticamente.
+> Redirige al usuario a esa URL. Al pagar, el webhook activa la oferta automáticamente y corre el matching inicial.
 
 ---
 
-### 24. Webhook de Wompi
+### 25. Webhook de Wompi
 `POST /api/payments/webhook` · 🔓 Público (solo para Wompi)
 
-> **No llamar desde el frontend.** Este endpoint es exclusivo para que Wompi notifique al backend cuando un pago es aprobado. Lo configuras en el dashboard de Wompi.
+> **No llamar desde el frontend.** Este endpoint es exclusivo para que Wompi notifique al backend cuando un pago es aprobado. Se configura en el dashboard de Wompi.
 
 ---
 
@@ -647,7 +808,7 @@ Base path: `/api/matching`
 
 ---
 
-### 25. Ver ranking de candidatos
+### 26. Ver ranking de candidatos
 `GET /api/matching/{offerId}` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -676,97 +837,135 @@ Base path: `/api/matching`
   "message": null
 }
 ```
-> La lista viene ordenada por `adjustedScore` desc (o `matchPercentage` si aún no tiene score de IA).
-> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` para candidatos que aún no fueron evaluados por IA (solo el top 3 recibe evaluación automática).
+> Lista ordenada por `adjustedScore` desc (o `matchPercentage` si no hay score de IA).
+> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` — solo el top 3 recibe evaluación automática.
+> El email real del candidato solo está visible cuando `stage = "Selected"`.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
-### 26. Ejecutar matching manualmente
+### 27. Ejecutar matching manualmente
 `POST /api/matching/{offerId}/run` · 🏢 Company
 
-Corre el matching incremental (solo candidatos nuevos). Normalmente el sistema lo hace automático; este endpoint es para forzarlo.
+Corre el matching incremental (solo candidatos nuevos sin match previo). Normalmente ocurre automático al activar la oferta; este endpoint permite forzarlo.
 
 **Sin body.**
 
 **Respuesta exitosa:** lista de matches igual que en "Ver ranking".
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El matching solo se puede ejecutar sobre ofertas en estado Open."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
+
 ---
 
-### 27. Reevaluar ranking completo
+### 28. Reevaluar ranking completo
 `POST /api/matching/{offerId}/reevaluate` · 🏢 Company
 
-Recalcula el score de TODOS los candidatos, incluyendo los que ya tenían match. Útil cuando la oferta fue editada.
+Recalcula el score de TODOS los candidatos. Útil cuando la oferta fue editada.
 
 **Sin body.**
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": [ /* lista completa de matches actualizada */ ],
-  "message": "Reevaluación completada."
-}
+{ "success": true, "data": [ /* lista completa actualizada */ ], "message": "Reevaluación completada." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Solo se puede reevaluar una oferta en estado Open."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
-### 28. Enviar test a candidatos
+### 29. Enviar test a candidatos
 `POST /api/matching/send-test` · 🏢 Company
 
-Evento único — no se puede volver a enviar. Los candidatos reciben el test por email con un link directo.
+Los candidatos reciben un email con link directo al test. Solo se puede enviar a candidatos en stage `Matched`.
 
 **Body:**
 ```json
-{
-  "matchIds": [12, 15, 18]
-}
+{ "matchIds": [12, 15, 18] }
 ```
-> `matchIds`: IDs de los matches (no de los candidatos). Solo se pueden enviar candidatos en stage `Matched`.
+
+| Campo | Reglas |
+|---|---|
+| `matchIds` | Requerido · lista de IDs de match (no de candidatos) |
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Tests enviados correctamente. Los candidatos recibirán un correo con el enlace."
-}
+{ "success": true, "data": null, "message": "Tests enviados correctamente. Los candidatos recibirán un correo con el enlace." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Debes seleccionar al menos un candidato."` |
+| 400 | `"Todos los matches deben pertenecer a la misma oferta."` |
+| 400 | `"Solo se puede enviar el test a candidatos en estado Matched. Los siguientes ya tienen otro estado: 12, 15"` |
+| 400 | `"La oferta aún no tiene un test generado. Espera a que la IA genere el test."` |
+| 400 | `"El tier de esta oferta permite máximo X candidatos con test. Ya tienes Y y estás intentando agregar Z más."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Uno o más matches no fueron encontrados."` |
 
 ---
 
-### 29. Seleccionar candidato
+### 30. Seleccionar candidato
 `POST /api/matching/{matchId}/select` · 🏢 Company
 
-Solo se puede seleccionar desde stage `TestCompleted`.
+Solo desde stage `TestCompleted`. Si al seleccionar se llenan todas las posiciones disponibles, la oferta pasa a `Completed` automáticamente. El candidato recibe un email de notificación (best-effort — si el envío falla, la selección igual se guarda).
 
 **Sin body.**
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": { /* objeto del match actualizado */ },
-  "message": "Candidato seleccionado correctamente."
-}
+{ "success": true, "data": { /* objeto del match actualizado */ }, "message": "Candidato seleccionado correctamente." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Solo puedes seleccionar candidatos que hayan completado el test."` |
+| 401 | `"No tienes acceso a este match."` |
+| 404 | `"Match no encontrado."` |
 
 ---
 
-### 30. Rechazar candidato
+### 31. Rechazar candidato
 `POST /api/matching/{matchId}/reject` · 🏢 Company
 
-Se puede rechazar desde `Matched`, `TestSent` o `TestCompleted`. No desde `Selected`.
+Se puede rechazar desde `Matched`, `TestSent` o `TestCompleted`. No desde `Selected`. El candidato recibe un email empático notificando que el proceso no continuó (best-effort).
 
 **Sin body.**
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Candidato rechazado correctamente."
-}
+{ "success": true, "data": null, "message": "Candidato rechazado correctamente." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se puede rechazar un candidato que ya fue seleccionado."` |
+| 400 | `"El candidato ya fue rechazado."` |
+| 401 | `"No tienes acceso a este match."` |
+| 404 | `"Match no encontrado."` |
 
 ---
 
@@ -778,10 +977,10 @@ Base path: `/api/tests`
 
 ---
 
-### 31. Generar test con IA
+### 32. Generar test con IA
 `POST /api/tests/{offerId}/generate` · 🏢 Company
 
-Genera el test técnico para la oferta. Se hace una sola vez al crear la oferta.
+Genera el test técnico para la oferta. Se hace una sola vez; para reemplazarlo usar `regenerate`.
 
 **Sin body.**
 
@@ -820,12 +1019,7 @@ Genera el test técnico para la oferta. Se hace una sola vez al crear la oferta.
         "gorillaHint": null,
         "correctAnswer": "B",
         "explanation": "=== compara valor Y tipo...",
-        "options": {
-          "A": "No hay diferencia",
-          "B": "=== compara tipo además del valor",
-          "C": "== es más estricto",
-          "D": "Solo se usa == en JavaScript moderno"
-        },
+        "options": { "A": "No hay diferencia", "B": "=== compara tipo además del valor", "C": "== es más estricto", "D": "Solo se usa == en JavaScript moderno" },
         "language": null,
         "functionSignature": null,
         "exampleInput": null,
@@ -839,23 +1033,32 @@ Genera el test técnico para la oferta. Se hace una sola vez al crear la oferta.
 
 ---
 
-### 32. Regenerar test
+### 33. Regenerar test
 `POST /api/tests/{offerId}/regenerate` · 🏢 Company
 
-Reemplaza el test existente con uno nuevo generado por IA.
+Reemplaza el test existente con uno nuevo generado por IA. **Borra el test anterior.**
 
 **Sin body.** Respuesta igual que generar.
 
 ---
 
-### 33. Ver test completo (empresa)
+### 34. Ver test completo (empresa)
 `GET /api/tests/{offerId}` · 🏢 Company
 
-Devuelve el test con todas las respuestas correctas visibles. Respuesta igual que generar.
+Devuelve el test con `correctAnswer` y `explanation` visibles.
+
+**Respuesta:** igual que generar.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Esta oferta aún no tiene un test generado."` |
 
 ---
 
-### 34. Ver historial de chat de una pregunta
+### 35. Ver historial de chat de una pregunta
 `GET /api/tests/questions/{questionId}/chat` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -872,17 +1075,17 @@ Devuelve el test con todas las respuestas correctas visibles. Respuesta igual qu
 
 ---
 
-### 35. Editar pregunta con IA (chat)
+### 36. Editar pregunta con IA (chat)
 `POST /api/tests/questions/{questionId}/chat` · 🏢 Company
-
-Envía un mensaje al asistente para modificar esa pregunta específica.
 
 **Body:**
 ```json
-{
-  "message": "Hazla más difícil y enfócala en hooks de React"
-}
+{ "message": "Hazla más difícil y enfócala en hooks de React" }
 ```
+
+| Campo | Reglas |
+|---|---|
+| `message` | Requerido |
 
 **Respuesta exitosa:**
 ```json
@@ -898,38 +1101,77 @@ Envía un mensaje al asistente para modificar esa pregunta específica.
 
 ---
 
-### 36. Ver test (candidato)
-`GET /api/tests/{offerId}/candidate` · 👤 Candidate
+### 37. Ver resumen del test sin iniciarlo (candidato)
+`GET /api/tests/{offerId}/candidate/preview` · 👤 Candidate
 
-Devuelve el test SIN respuestas correctas ni hints. La primera llamada registra `startedAt` e inicia el contador de tiempo.
+Devuelve solo los metadatos del test — título, tiempo límite y conteo de preguntas por tipo. **No toca `startedAt` ni inicia el cronómetro.** Usar para mostrarle al candidato qué le espera antes de que confirme que quiere empezar.
 
-**Respuesta exitosa:** igual que generar test, pero los campos `correctAnswer`, `explanation`, `isGorilla` y `gorillaHint` siempre vienen `null`.
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "data": {
+    "testId": 3,
+    "title": "Test técnico — Desarrollador React Senior",
+    "timeLimitMinutes": 45,
+    "totalQuestions": 6,
+    "multipleChoiceCount": 5,
+    "codeChallengeCount": 1
+  },
+  "message": null
+}
+```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El plazo para rendir este test ha expirado."` |
+| 400 | `"Ya enviaste tus respuestas. Espera los resultados."` |
+| 401 | `"No estás invitado a rendir este test."` |
+| 404 | `"Test no encontrado."` |
+| 404 | `"Perfil de candidato no encontrado."` |
 
 ---
 
-### 37. Enviar respuestas
+### 38. Iniciar test y obtener preguntas (candidato)
+`POST /api/tests/{offerId}/candidate/start` · 👤 Candidate
+
+**Sin body.** Registra `startedAt` en el primer acceso e inicia el cronómetro. Devuelve las preguntas **sin** respuestas correctas ni hints. Llamar únicamente cuando el candidato confirme "quiero empezar" — no hay vuelta atrás.
+
+**Respuesta exitosa:** igual que generar test, pero `correctAnswer`, `explanation`, `isGorilla` y `gorillaHint` siempre vienen `null`.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El plazo para rendir este test ha expirado."` |
+| 400 | `"Ya enviaste tus respuestas. Espera los resultados."` |
+| 401 | `"No estás invitado a rendir este test."` |
+| 404 | `"Test no encontrado."` |
+| 404 | `"Perfil de candidato no encontrado."` |
+
+---
+
+### 39. Enviar respuestas
 `POST /api/tests/{testId}/submit` · 👤 Candidate
 
 **Body:**
 ```json
 {
   "answers": [
-    {
-      "questionId": 10,
-      "selectedOption": null,
-      "codeSubmitted": "function solve(arr) { return Math.max(...arr); }"
-    },
-    {
-      "questionId": 11,
-      "selectedOption": "B",
-      "codeSubmitted": null
-    }
+    { "questionId": 10, "selectedOption": null, "codeSubmitted": "function solve(arr) { return Math.max(...arr); }" },
+    { "questionId": 11, "selectedOption": "B",  "codeSubmitted": null }
   ]
 }
 ```
-> Para `MultipleChoice`: llenar `selectedOption` con `"A"`, `"B"`, `"C"` o `"D"`.
-> Para `CodeChallenge`: llenar `codeSubmitted` con el código escrito por el candidato.
-> Si el tiempo límite expiró desde que inició el test, la respuesta será `400` con un mensaje de tiempo agotado.
+
+| Campo | Reglas |
+|---|---|
+| `answers` | Requerido |
+| `answers[].questionId` | Entero positivo |
+| `answers[].selectedOption` | Opcional · solo `"A"`, `"B"`, `"C"` o `"D"` (para MultipleChoice) |
+| `answers[].codeSubmitted` | Opcional · código libre (para CodeChallenge) |
 
 **Respuesta exitosa:**
 ```json
@@ -942,20 +1184,42 @@ Devuelve el test SIN respuestas correctas ni hints. La primera llamada registra 
     "submittedAt": "2026-06-25T16:00:00Z",
     "aiEvaluatedAt": "2026-06-25T16:00:10Z",
     "questionResults": [
-      { "questionId": 10, "isCorrect": true, "feedback": "Solución correcta y eficiente." },
-      { "questionId": 11, "isCorrect": true, "feedback": null }
+      { "questionId": 10, "isCorrect": true,  "feedback": "Solución correcta y eficiente." },
+      { "questionId": 11, "isCorrect": true,  "feedback": null }
     ]
   },
   "message": "Respuestas enviadas y evaluadas correctamente."
 }
 ```
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Debes incluir al menos una respuesta."` |
+| 400 | `"La opción seleccionada debe ser A, B, C o D."` |
+| 400 | `"El plazo para rendir este test ha expirado."` |
+| 400 | `"Tiempo agotado. El test debía completarse en X minutos."` |
+| 400 | `"Ya enviaste tus respuestas."` |
+| 401 | `"No tienes una submission activa para este test."` |
+| 404 | `"Perfil de candidato no encontrado."` |
+
 ---
 
-### 38. Ver resultado de un test
+### 39. Ver resultado de un test
 `GET /api/tests/{testId}/result` · 👤 Candidate
 
-Devuelve el resultado si ya fue evaluado. Respuesta igual que enviar respuestas.
+Devuelve el resultado si ya fue evaluado.
+
+**Respuesta:** igual que enviar respuestas.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Aún no has enviado tus respuestas."` |
+| 401 | `"No tienes una submission para este test."` |
+| 404 | `"Perfil de candidato no encontrado."` |
 
 ---
 
@@ -967,7 +1231,7 @@ Base path: `/api/admin`
 
 ---
 
-### 39. Listar usuarios
+### 40. Listar usuarios
 `GET /api/admin/users` · 🛡️ Admin
 
 **Query params opcionales:**
@@ -1000,48 +1264,100 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 40. Ver usuario por ID
+### 41. Ver usuario por ID
 `GET /api/admin/users/{userId}` · 🛡️ Admin
 
 **Respuesta exitosa:** objeto igual al de la lista.
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 404 | `"Usuario {id} no encontrado."` |
+
 ---
 
-### 41. Activar / desactivar cuenta
+### 42. Crear administrador
+`POST /api/admin/users` · 🛡️ Admin
+
+Único endpoint para crear cuentas de tipo Admin. El registro público bloquea este rol.
+
+**Body:**
+```json
+{
+  "fullName": "Admin MatchIQ",
+  "email": "admin@matchiq.co",
+  "cedula": "9876543210",
+  "password": "AdminPass.1",
+  "confirmPassword": "AdminPass.1"
+}
+```
+
+| Campo | Reglas |
+|---|---|
+| `fullName` | Requerido |
+| `email` | Requerido · formato email válido |
+| `cedula` | Requerido |
+| `password` | Requerido · mismas reglas de complejidad que el registro |
+| `confirmPassword` | Requerido · debe ser idéntico a `password` |
+
+**Respuesta exitosa:**
+```json
+{ "success": true, "data": null, "message": "Administrador creado correctamente." }
+```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"Las contraseñas no coinciden."` |
+| 400 | `"La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial."` |
+| 400 | `"El email ya está registrado."` |
+| 400 | `"La cédula ya está registrada."` |
+
+---
+
+### 43. Activar / desactivar cuenta
 `PATCH /api/admin/users/{userId}/toggle-status` · 🛡️ Admin
 
 **Sin body.**
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": { /* objeto del usuario con el nuevo estado */ },
-  "message": "Cuenta desactivada correctamente."
-}
+{ "success": true, "data": { /* objeto del usuario con el nuevo estado */ }, "message": "Cuenta desactivada correctamente." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se puede desactivar la cuenta de un administrador."` |
+| 404 | `"Usuario {id} no encontrado."` |
 
 ---
 
-### 42. Eliminar usuario
+### 44. Eliminar usuario
 `DELETE /api/admin/users/{userId}` · 🛡️ Admin
 
-Elimina en cascada: perfil, offers, matches, submissions, etc.
+Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 
 **Sin body.**
 
 **Respuesta exitosa:**
 ```json
-{
-  "success": true,
-  "data": null,
-  "message": "Usuario eliminado correctamente."
-}
+{ "success": true, "data": null, "message": "Usuario eliminado correctamente." }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se puede eliminar la cuenta de un administrador."` |
+| 404 | `"Usuario {id} no encontrado."` |
 
 ---
 
-### 43. Estadísticas del sistema
+### 45. Estadísticas del sistema
 `GET /api/admin/stats` · 🛡️ Admin
 
 **Respuesta exitosa:**
@@ -1074,24 +1390,24 @@ Elimina en cascada: perfil, offers, matches, submissions, etc.
 
 ---
 
-## Flujo típico por rol
+## Flujos por rol
 
 ### Flujo Empresa (Company)
 ```
-1. register → 2. verify-email → 3. login
-4. company/profile (PUT) — completar nombre de empresa
-5. catalog/categories + catalog/categories/{id}/skills — cargar catálogo
-6. offers/tiers — mostrar precios
-7. offers/parse-description (opcional) — pre-llenar formulario con IA
-8. offers (POST) — crear oferta
-9. payments/create-checkout?offerId=X — generar link de Wompi y redirigir
-   [Wompi procesa el pago y llama al webhook — la oferta pasa a Open automáticamente]
+1.  register → 2. verify-email → 3. login
+4.  company/profile (PUT) — completar nombre de empresa
+5.  catalog/categories + catalog/categories/{id}/skills — cargar catálogo
+6.  offers/tiers — mostrar opciones de precio
+7.  offers/parse-description (opcional) — pre-llenar formulario con IA
+8.  offers (POST) — crear oferta → queda en PendingPayment
+9.  payments/create-checkout?offerId=X → redirigir al usuario a Wompi
+    [Wompi confirma el pago → webhook activa la oferta → corre matching inicial]
 10. tests/{offerId}/generate — generar test técnico
-11. tests/questions/{id}/chat (POST) — editar preguntas (opcional)
+11. tests/questions/{id}/chat (POST) — ajustar preguntas con IA (opcional)
 12. matching/{offerId} (GET) — ver ranking de candidatos
 13. matching/send-test (POST) — enviar test a candidatos seleccionados
-14. matching/{offerId} (GET) — ver resultados cuando candidates completen el test
-15. matching/{matchId}/select o /reject — tomar decisión final
+14. matching/{offerId} (GET) — ver resultados cuando completen el test
+15. matching/{matchId}/select o /reject — decisión final
 ```
 
 ### Flujo Candidato (Candidate)
@@ -1099,19 +1415,23 @@ Elimina en cascada: perfil, offers, matches, submissions, etc.
 1. register → 2. verify-email → 3. login
 4. candidate/profile (PUT) — completar perfil (dispara matching automático)
    [El sistema evalúa al candidato contra todas las ofertas abiertas]
-   [Candidato recibe email si es seleccionado para presentar un test]
-5. tests/{offerId}/candidate (GET) — ver el test (inicia el contador de tiempo)
-6. tests/{testId}/submit (POST) — enviar respuestas antes de que expire el tiempo
-7. tests/{testId}/result (GET) — ver calificación y feedback
+   [Candidato recibe email de invitación cuando la empresa le envía el test]
+5. tests/{offerId}/candidate/preview (GET) — ver resumen del test (sin iniciar cronómetro)
+   [Mostrar: título, tiempo límite, número y tipos de preguntas]
+   [El candidato confirma "Quiero empezar"]
+6. tests/{offerId}/candidate/start (POST) — iniciar test formalmente (inicia cronómetro)
+7. tests/{testId}/submit (POST) — enviar respuestas
+8. tests/{testId}/result (GET) — ver calificación y feedback
 ```
 
 ---
 
-## Notas importantes para implementación
+## Notas de implementación
 
 1. **Manejo del token:** al recibir `401`, intentar renovar con `/api/auth/refresh`. Si el refresh también falla, redirigir al login.
-2. **Tiempo del test:** al llamar `GET /tests/{offerId}/candidate`, guardar `timeLimitMinutes`. Mostrar un contador regresivo en la UI. Si el tiempo corre, el backend rechaza el submit con `400`.
-3. **Estado de oferta:** mostrar `checkoutUrl` en la oferta cuando `status = "PendingPayment"` para que la empresa pueda pagar.
-4. **Privacidad en matching:** el email del candidato solo aparece real cuando `stage = "Selected"`. En otros stages puede mostrarse con máscara si el backend lo retorna.
-5. **Rate limits:** no reintentar inmediatamente al recibir `429` — esperar al menos 60 segundos.
-6. **Catálogo:** cargar categorías y skills una sola vez al inicio y cachearlas localmente — no cambian con frecuencia.
+2. **Tiempo del test:** guardar `timeLimitMinutes` desde la respuesta de `preview`. Al hacer `start`, comenzar el contador en el cliente. Si el tiempo corre, el backend rechaza el submit con `400` y marca la submission como expirada.
+3. **Flujo de test en dos pasos:** llamar `preview` para mostrar qué le espera al candidato. Solo llamar `start` cuando el candidato confirme explícitamente — ese POST registra `startedAt` y no hay vuelta atrás.
+4. **Estado de la oferta:** cuando `status = "PendingPayment"`, mostrar el botón de pago. `checkoutUrl` puede ser `null` si aún no se generó el link — llamar `create-checkout` para obtenerlo.
+5. **Email del candidato en matching:** el email real solo aparece cuando `stage = "Selected"`. En etapas anteriores puede venir enmascarado.
+6. **Rate limits:** al recibir `429`, esperar al menos 60 segundos antes de reintentar. No mostrar un spinner — informar al usuario.
+7. **Catálogo:** cargar categorías y skills una sola vez al iniciar la app y cachear — no cambian con frecuencia.
