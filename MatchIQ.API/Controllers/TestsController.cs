@@ -1,3 +1,4 @@
+using MatchIQ.API.Common;
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Tests;
 using MatchIQ.Application.Modules.Tests.Dtos;
@@ -31,7 +32,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> GenerateTest(int offerId)
     {
         var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId);
-        return Ok(test);
+        return Ok(ApiResponse.Ok(test, "Test generado correctamente."));
     }
 
     [HttpPost("{offerId:int}/regenerate")]
@@ -39,7 +40,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> RegenerateTest(int offerId)
     {
         var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, forceRegenerate: true);
-        return Ok(test);
+        return Ok(ApiResponse.Ok(test, "Test regenerado correctamente."));
     }
 
     [HttpGet("{offerId:int}")]
@@ -47,7 +48,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> GetFullTest(int offerId)
     {
         var test = await _testService.GetFullTestAsync(offerId, _currentUser.UserId);
-        return Ok(test);
+        return Ok(ApiResponse.Ok(test));
     }
 
     [HttpGet("questions/{questionId:int}/chat")]
@@ -55,7 +56,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> GetChatHistory(int questionId)
     {
         var history = await _testEditorService.GetChatHistoryAsync(questionId, _currentUser.UserId);
-        return Ok(history);
+        return Ok(ApiResponse.Ok(history));
     }
 
     [HttpPost("questions/{questionId:int}/chat")]
@@ -63,7 +64,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> SendChatMessage(int questionId, [FromBody] SendChatMessageDto dto)
     {
         var result = await _testEditorService.SendMessageAsync(questionId, _currentUser.UserId, dto.Message);
-        return Ok(result);
+        return Ok(ApiResponse.Ok(result));
     }
 
     // ── Candidato ─────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> GetTestForCandidate(int offerId)
     {
         var test = await _testService.GetTestForCandidateAsync(offerId, _currentUser.UserId);
-        return Ok(test);
+        return Ok(ApiResponse.Ok(test));
     }
 
     [HttpPost("{testId:int}/submit")]
@@ -81,7 +82,7 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> SubmitAnswers(int testId, [FromBody] SubmitAnswersDto dto)
     {
         var result = await _testService.SubmitAnswersAsync(testId, _currentUser.UserId, dto);
-        return Ok(result);
+        return Ok(ApiResponse.Ok(result, "Respuestas enviadas y evaluadas correctamente."));
     }
 
     [HttpGet("{testId:int}/result")]
@@ -89,6 +90,6 @@ public class TestsController : ControllerBase
     public async Task<IActionResult> GetSubmissionResult(int testId)
     {
         var result = await _testService.GetSubmissionResultAsync(testId, _currentUser.UserId);
-        return Ok(result);
+        return Ok(ApiResponse.Ok(result));
     }
 }
