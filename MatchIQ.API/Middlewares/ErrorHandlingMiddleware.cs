@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using MatchIQ.API.Common;
 
 namespace MatchIQ.API.Middlewares;
 
@@ -31,17 +32,20 @@ public class ErrorHandlingMiddleware
     {
         var (statusCode, message) = ex switch
         {
-            InvalidOperationException   => (HttpStatusCode.BadRequest,         ex.Message),
-            UnauthorizedAccessException => (HttpStatusCode.Unauthorized,        ex.Message),
-            KeyNotFoundException        => (HttpStatusCode.NotFound,            ex.Message),
-            NotImplementedException     => (HttpStatusCode.NotImplemented,      "Funcionalidad no implementada."),
-            _                          => (HttpStatusCode.InternalServerError,  "Ocurrió un error interno.")
+            InvalidOperationException   => (HttpStatusCode.BadRequest,        ex.Message),
+            UnauthorizedAccessException => (HttpStatusCode.Unauthorized,       ex.Message),
+            KeyNotFoundException        => (HttpStatusCode.NotFound,           ex.Message),
+            NotImplementedException     => (HttpStatusCode.NotImplemented,     "Funcionalidad no implementada."),
+            _                          => (HttpStatusCode.InternalServerError, "Ocurrió un error interno.")
         };
 
         context.Response.ContentType = "application/json";
         context.Response.StatusCode  = (int)statusCode;
 
-        var body = JsonSerializer.Serialize(new { error = message });
+        var body = JsonSerializer.Serialize(
+            ApiResponse.Fail(message),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
         return context.Response.WriteAsync(body);
     }
 }

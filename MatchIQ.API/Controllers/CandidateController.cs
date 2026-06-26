@@ -1,3 +1,4 @@
+using MatchIQ.API.Common;
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Candidate;
 using MatchIQ.Application.Modules.Candidate.Dtos;
@@ -24,13 +25,13 @@ public class CandidateController : ControllerBase
     public async Task<IActionResult> GetProfile()
     {
         var profile = await _candidateService.GetProfileAsync(_currentUser.UserId);
-        return Ok(profile);
+        return Ok(ApiResponse.Ok(profile));
     }
 
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCandidateDto dto)
     {
         var profile = await _candidateService.UpdateProfileAsync(_currentUser.UserId, dto);
-        return Ok(profile);
+        return Ok(ApiResponse.Ok(profile, "Perfil actualizado correctamente."));
     }
 }

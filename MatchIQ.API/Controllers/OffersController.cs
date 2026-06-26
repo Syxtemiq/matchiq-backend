@@ -1,3 +1,4 @@
+using MatchIQ.API.Common;
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Catalog.Dtos;
 using MatchIQ.Application.Modules.Offers;
@@ -40,55 +41,55 @@ public class OffersController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(tiers);
+        return Ok(ApiResponse.Ok(tiers));
     }
 
     [HttpPost("parse-description")]
     public async Task<IActionResult> ParseDescription([FromBody] ParseOfferDto dto)
     {
         var result = await _offersService.ParseFromDescriptionAsync(dto.RawDescription);
-        return Ok(result);
+        return Ok(ApiResponse.Ok(result));
     }
 
     [HttpPost]
     public async Task<IActionResult> CreateOffer([FromBody] CreateOfferDto dto)
     {
         var offer = await _offersService.CreateOfferAsync(_currentUser.UserId, dto);
-        return Created($"/api/offers/{offer.Id}", offer);
+        return Ok(ApiResponse.Ok(offer, "Oferta creada correctamente."));
     }
 
     [HttpGet]
     public async Task<IActionResult> GetMyOffers()
     {
         var offers = await _offersService.GetMyOffersAsync(_currentUser.UserId);
-        return Ok(offers);
+        return Ok(ApiResponse.Ok(offers));
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetOfferById(int id)
     {
         var offer = await _offersService.GetOfferByIdAsync(_currentUser.UserId, id);
-        return Ok(offer);
+        return Ok(ApiResponse.Ok(offer));
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateOffer(int id, [FromBody] UpdateOfferDto dto)
     {
         var offer = await _offersService.UpdateOfferAsync(_currentUser.UserId, id, dto);
-        return Ok(offer);
+        return Ok(ApiResponse.Ok(offer, "Oferta actualizada correctamente."));
     }
 
     [HttpPatch("{id:int}/cancel")]
     public async Task<IActionResult> CancelOffer(int id)
     {
         var result = await _offersService.CancelOfferAsync(_currentUser.UserId, id);
-        return Ok(result);
+        return Ok(ApiResponse.Ok(result, "Oferta cancelada correctamente."));
     }
 
     [HttpPost("{id:int}/force-cancel")]
     public async Task<IActionResult> ForceCancel(int id)
     {
         await _offersService.ForceCancelAsync(_currentUser.UserId, id);
-        return NoContent();
+        return Ok(ApiResponse.Ok("Oferta forzada a cancelar correctamente."));
     }
 }

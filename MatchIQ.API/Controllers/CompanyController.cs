@@ -1,3 +1,4 @@
+using MatchIQ.API.Common;
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Company;
 using MatchIQ.Application.Modules.Company.Dtos;
@@ -24,13 +25,13 @@ public class CompanyController : ControllerBase
     public async Task<IActionResult> GetProfile()
     {
         var profile = await _companyService.GetProfileAsync(_currentUser.UserId);
-        return Ok(profile);
+        return Ok(ApiResponse.Ok(profile));
     }
 
     [HttpPut("profile")]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateCompanyDto dto)
     {
         var profile = await _companyService.UpdateProfileAsync(_currentUser.UserId, dto);
-        return Ok(profile);
+        return Ok(ApiResponse.Ok(profile, "Perfil actualizado correctamente."));
     }
 }

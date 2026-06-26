@@ -1,3 +1,4 @@
+using MatchIQ.API.Common;
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Catalog.Dtos;
 using Microsoft.AspNetCore.Mvc;
@@ -24,7 +25,7 @@ public class CatalogController : ControllerBase
             .Select(c => new CategoryDto { Id = c.Id, Name = c.Name })
             .ToListAsync();
 
-        return Ok(categories);
+        return Ok(ApiResponse.Ok(categories));
     }
 
     [HttpGet("categories/{categoryId:int}/skills")]
@@ -40,6 +41,6 @@ public class CatalogController : ControllerBase
             .Select(s => new SkillDto { Id = s.Id, Name = s.Name, CategoryId = s.CategoryId })
             .ToListAsync();
 
-        return Ok(skills);
+        return Ok(ApiResponse.Ok(skills));
     }
 }
