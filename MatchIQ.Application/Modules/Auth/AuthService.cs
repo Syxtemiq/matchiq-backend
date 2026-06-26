@@ -34,7 +34,7 @@ public class AuthService
 
     public async Task RegisterAsync(RegisterDto dto)
     {
-        if (!Enum.TryParse<UserRole>(dto.Role, out var role) || role == UserRole.Admin)
+        if (!Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out var role) || role == UserRole.Admin)
             throw new InvalidOperationException("No se puede registrar un administrador.");
 
         var emailTaken = await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower());
@@ -219,7 +219,7 @@ public class AuthService
         UserRole parsedRole = UserRole.Candidate;
         if (!string.IsNullOrEmpty(dto.Role))
         {
-            if (!Enum.TryParse<UserRole>(dto.Role, out parsedRole) || parsedRole == UserRole.Admin)
+            if (!Enum.TryParse<UserRole>(dto.Role, ignoreCase: true, out parsedRole) || parsedRole == UserRole.Admin)
                 throw new InvalidOperationException("No se puede registrar un administrador con Google.");
         }
 
