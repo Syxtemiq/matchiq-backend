@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using MatchIQ.Domain.Enums;
 
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
@@ -9,5 +8,7 @@ public class GoogleLoginDto
     public string IdToken { get; set; } = string.Empty;
 
     // Solo se usa para usuarios nuevos; para usuarios existentes se ignora
-    public UserRole Role { get; set; }
+    [RegularExpression(@"(?i)^(Candidate|Company)$",
+        ErrorMessage = "El rol debe ser 'Candidate' o 'Company'.")]
+    public string? Role { get; set; }
 }

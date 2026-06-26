@@ -203,8 +203,12 @@ builder.Services.AddControllers()
         {
             var firstError = context.ModelState
                 .Where(e => e.Value?.Errors.Count > 0)
-                .SelectMany(e => e.Value!.Errors.Select(err => err.ErrorMessage))
-                .FirstOrDefault() ?? "Datos de entrada inválidos.";
+                .SelectMany(e => e.Value!.Errors.Select(err =>
+                    !string.IsNullOrEmpty(err.ErrorMessage)
+                        ? err.ErrorMessage
+                        : err.Exception?.Message))
+                .FirstOrDefault(m => !string.IsNullOrEmpty(m))
+                ?? "Datos de entrada inválidos.";
 
             return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
                 MatchIQ.API.Common.ApiResponse.Fail(firstError));

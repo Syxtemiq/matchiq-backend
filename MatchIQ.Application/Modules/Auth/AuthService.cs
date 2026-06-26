@@ -34,7 +34,7 @@ public class AuthService
 
     public async Task RegisterAsync(RegisterDto dto)
     {
-        if (dto.Role == UserRole.Admin)
+        if (!Enum.TryParse<UserRole>(dto.Role, out var role) || role == UserRole.Admin)
             throw new InvalidOperationException("No se puede registrar un administrador.");
 
         var emailTaken = await _context.Users.AnyAsync(u => u.Email == dto.Email.ToLower());
@@ -51,7 +51,7 @@ public class AuthService
             FullName = dto.FullName.Trim(),
             Cedula = dto.Cedula.Trim(),
             PasswordHash = _passwordHasher.Hash(dto.Password),
-            Role = dto.Role,
+            Role = role,
             IsActive = true,
             EmailVerified = false
         };
@@ -216,8 +216,12 @@ public class AuthService
 
     public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginDto dto)
     {
-        if (dto.Role == UserRole.Admin)
-            throw new InvalidOperationException("No se puede registrar un administrador con Google.");
+        UserRole parsedRole = UserRole.Candidate;
+        if (!string.IsNullOrEmpty(dto.Role))
+        {
+            if (!Enum.TryParse<UserRole>(dto.Role, out parsedRole) || parsedRole == UserRole.Admin)
+                throw new InvalidOperationException("No se puede registrar un administrador con Google.");
+        }
 
         var googleUser = await _googleValidator.ValidateAsync(dto.IdToken);
 
@@ -250,7 +254,7 @@ public class AuthService
                 FullName = googleUser.Name,
                 GoogleId = googleUser.GoogleId,
                 PictureUrl = googleUser.PictureUrl,
-                Role = dto.Role,
+                Role = parsedRole,
                 IsActive = true,
                 EmailVerified = true  // Google ya verificó el email
             };
