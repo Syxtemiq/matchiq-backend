@@ -34,9 +34,6 @@ public class AuthService
 
     public async Task RegisterAsync(RegisterDto dto)
     {
-        if (dto.Password != dto.ConfirmPassword)
-            throw new InvalidOperationException("Las contraseñas no coinciden.");
-
         if (dto.Role == UserRole.Admin)
             throw new InvalidOperationException("No se puede registrar un administrador.");
 
@@ -203,9 +200,6 @@ public class AuthService
 
     public async Task ResetPasswordAsync(ResetPasswordDto dto)
     {
-        if (dto.NewPassword != dto.ConfirmPassword)
-            throw new InvalidOperationException("Las contraseñas no coinciden.");
-
         var resetToken = await _context.PasswordResetTokens
             .Include(t => t.User)
             .FirstOrDefaultAsync(t =>
