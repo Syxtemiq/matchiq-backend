@@ -1,5 +1,8 @@
 using System.Text;
 using System.Threading.RateLimiting;
+using MatchIQ.Domain.Enums;
+using Npgsql;
+using Npgsql.NameTranslation;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
@@ -27,8 +30,26 @@ using OpenAI.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Base de datos ─────────────────────────────────────────────────────────────
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(
+    builder.Configuration.GetConnectionString("DefaultConnection")!);
+
+// Mapeo de enums de PostgreSQL — sin esto EF Core envía text y PostgreSQL rechaza el cast
+dataSourceBuilder.MapEnum<UserRole>("user_role_enum");
+dataSourceBuilder.MapEnum<Seniority>("seniority_enum");
+dataSourceBuilder.MapEnum<Modality>("modality_enum");
+dataSourceBuilder.MapEnum<OfferStatus>("offer_status_enum");
+dataSourceBuilder.MapEnum<MatchStage>("match_stage_enum");
+dataSourceBuilder.MapEnum<SubmissionStatus>("submission_status_enum");
+dataSourceBuilder.MapEnum<PaymentStatus>("payment_status_enum");
+dataSourceBuilder.MapEnum<QuestionType>("question_type_enum");
+dataSourceBuilder.MapEnum<ChatRole>("chat_role_enum");
+// EnglishLevel usa labels en mayúsculas ('A1','A2'...) — se preserva el nombre C# tal cual
+dataSourceBuilder.MapEnum<EnglishLevel>("english_level_enum", new NpgsqlNullNameTranslator());
+
+var npgsqlDataSource = dataSourceBuilder.Build();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(npgsqlDataSource));
 
 // ── Autenticación JWT ─────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

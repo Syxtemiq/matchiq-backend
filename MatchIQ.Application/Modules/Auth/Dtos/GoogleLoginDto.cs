@@ -1,10 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using MatchIQ.Domain.Enums;
 
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
 public class GoogleLoginDto
 {
-    // ID token que Google devuelve al frontend tras el flujo OAuth
+    [Required]
     public string IdToken { get; set; } = string.Empty;
 
     // Solo se usa para usuarios nuevos; para usuarios existentes se ignora
