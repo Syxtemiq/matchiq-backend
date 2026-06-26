@@ -189,7 +189,22 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Unifica los errores de validación de DTOs con el mismo ApiResponse<T>
+        // que usa el resto de la API — sin esto, [ApiController] devolvería ProblemDetails
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var firstError = context.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .SelectMany(e => e.Value!.Errors.Select(err => err.ErrorMessage))
+                .FirstOrDefault() ?? "Datos de entrada inválidos.";
+
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+                MatchIQ.API.Common.ApiResponse.Fail(firstError));
+        };
+    });
 
 var app = builder.Build();
 
