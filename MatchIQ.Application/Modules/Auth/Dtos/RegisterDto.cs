@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using MatchIQ.Domain.Enums;
 
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
@@ -24,5 +23,8 @@ public class RegisterDto
     [Compare("Password", ErrorMessage = "Las contraseñas no coinciden.")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
-    public UserRole Role { get; set; }
+    [Required]
+    [RegularExpression(@"(?i)^(Candidate|Company)$",
+        ErrorMessage = "El rol debe ser 'Candidate' o 'Company'.")]
+    public string Role { get; set; } = string.Empty;
 }
