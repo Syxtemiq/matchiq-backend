@@ -1,13 +1,11 @@
+using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatchIQ.Infrastructure.Persistence;
 
-// DbContext principal de la aplicación
-// Configura todas las entidades, relaciones, enums y constraints
-// Los enums se guardan como strings en Postgres (HasConversion<string>)
-// El mapeo de tablas/columnas en snake_case y las constraints siguen 1 a 1 a DBContext.md
-public class AppDbContext : DbContext
+
+public class AppDbContext : DbContext, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -53,14 +51,18 @@ public class AppDbContext : DbContext
         {
             e.ToTable("users");
             e.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+            e.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(255);
+            e.Property(x => x.Cedula).HasColumnName("cedula").HasMaxLength(20);
             e.Property(x => x.PasswordHash).HasColumnName("password_hash");
             e.Property(x => x.Role).HasColumnName("role").HasConversion<string>().IsRequired();
             e.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            e.Property(x => x.EmailVerified).HasColumnName("email_verified").HasDefaultValue(false);
             e.Property(x => x.GoogleId).HasColumnName("google_id").HasMaxLength(255);
             e.Property(x => x.PictureUrl).HasColumnName("picture_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.Email).IsUnique();
+            e.HasIndex(x => x.Cedula).IsUnique().HasFilter("cedula IS NOT NULL");
             e.HasIndex(x => x.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
         });
 
@@ -129,6 +131,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Seniority).HasColumnName("seniority").HasConversion<string>();
             e.Property(x => x.EnglishLevel).HasColumnName("english_level").HasConversion<string>();
             e.Property(x => x.GithubLink).HasColumnName("github_link");
+            e.Property(x => x.LinkedinUrl).HasColumnName("linkedin_url");
             e.Property(x => x.ProfilePhotoUrl).HasColumnName("profile_photo_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -300,8 +303,8 @@ public class AppDbContext : DbContext
             e.ToTable("payments");
             e.Property(x => x.OfferId).HasColumnName("offer_id").IsRequired();
             e.Property(x => x.TierId).HasColumnName("tier_id").IsRequired();
-            e.Property(x => x.StripePaymentIntentId).HasColumnName("stripe_payment_intent_id").HasMaxLength(255);
-            e.Property(x => x.StripeCheckoutSessionId).HasColumnName("stripe_checkout_session_id").HasMaxLength(255);
+            e.Property(x => x.PaymentTransactionId).HasColumnName("payment_transaction_id").HasMaxLength(255);
+            e.Property(x => x.PaymentCheckoutId).HasColumnName("payment_checkout_id").HasMaxLength(255);
             e.Property(x => x.AmountCop).HasColumnName("amount_cop").HasPrecision(12, 2).IsRequired();
             e.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasDefaultValue(Domain.Enums.PaymentStatus.Pending);
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
@@ -309,8 +312,8 @@ public class AppDbContext : DbContext
 
             e.HasIndex(x => x.OfferId).IsUnique().HasDatabaseName("idx_payments_offer_id");
             e.HasIndex(x => x.Status).HasDatabaseName("idx_payments_status");
-            e.HasIndex(x => x.StripePaymentIntentId).IsUnique().HasDatabaseName("idx_payments_stripe_intent");
-            e.HasIndex(x => x.StripeCheckoutSessionId).IsUnique();
+            e.HasIndex(x => x.PaymentTransactionId).IsUnique().HasDatabaseName("idx_payments_transaction_id");
+            e.HasIndex(x => x.PaymentCheckoutId).IsUnique();
 
             e.HasOne(x => x.JobOffer)
                 .WithOne(jo => jo.Payment)

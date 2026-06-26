@@ -2,17 +2,18 @@ using MatchIQ.Domain.Enums;
 
 namespace MatchIQ.Domain.Entities;
 
-// Representa un usuario del sistema (admin, candidato o empresa)
-// Todo usuario tiene exactamente un perfil según su rol
 public class User
 {
     public int Id { get; set; }
     public string Email { get; set; } = string.Empty;
-    public string? PasswordHash { get; set; }   // NULL si se registró con Google
+    public string? FullName { get; set; }
+    public string? Cedula { get; set; }
+    public string? PasswordHash { get; set; }
     public UserRole Role { get; set; }
     public bool IsActive { get; set; } = true;
-    public string? GoogleId { get; set; }       // NULL si se registró con email
-    public string? PictureUrl { get; set; }     // foto de perfil de Google
+    public bool EmailVerified { get; set; } = false;
+    public string? GoogleId { get; set; }
+    public string? PictureUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public CandidateProfile? CandidateProfile { get; set; }

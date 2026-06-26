@@ -1,16 +1,51 @@
+using System.Net;
+using System.Text.Json;
+using MatchIQ.API.Common;
+
 namespace MatchIQ.API.Middlewares;
 
-// Middleware global de manejo de errores
-// Captura excepciones no controladas y retorna respuestas JSON consistentes
-// Equivalente a error.middleware.js del backend Node
-// Mapea tipos de excepción a códigos HTTP:
-//   - InvalidOperationException → 400
-//   - UnauthorizedAccessException → 401
-//   - KeyNotFoundException → 404
-//   - Exception genérica → 500
 public class ErrorHandlingMiddleware
 {
-    // TODO: constructor con RequestDelegate next, ILogger
-    // TODO: InvokeAsync(HttpContext context)
-    //       try/catch que atrapa todo y retorna { error: message } en JSON
+    private readonly RequestDelegate _next;
+    private readonly ILogger<ErrorHandlingMiddleware> _logger;
+
+    public ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorHandlingMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Excepción no controlada: {Message}", ex.Message);
+            await WriteErrorAsync(context, ex);
+        }
+    }
+
+    private static Task WriteErrorAsync(HttpContext context, Exception ex)
+    {
+        var (statusCode, message) = ex switch
+        {
+            InvalidOperationException   => (HttpStatusCode.BadRequest,        ex.Message),
+            UnauthorizedAccessException => (HttpStatusCode.Unauthorized,       ex.Message),
+            KeyNotFoundException        => (HttpStatusCode.NotFound,           ex.Message),
+            NotImplementedException     => (HttpStatusCode.NotImplemented,     "Funcionalidad no implementada."),
+            _                          => (HttpStatusCode.InternalServerError, "Ocurrió un error interno.")
+        };
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode  = (int)statusCode;
+
+        var body = JsonSerializer.Serialize(
+            ApiResponse.Fail(message),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        return context.Response.WriteAsync(body);
+    }
 }

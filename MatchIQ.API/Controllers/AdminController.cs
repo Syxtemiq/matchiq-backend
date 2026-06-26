@@ -1,21 +1,57 @@
+using MatchIQ.API.Common;
+using MatchIQ.Application.Modules.Admin;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
 namespace MatchIQ.API.Controllers;
 
-// [ApiController]
-// [Route("api/admin")]
-// [Authorize(Roles = "Admin")]
-public class AdminController // : ControllerBase
+[ApiController]
+[Route("api/admin")]
+[Authorize(Roles = "Admin")]
+public class AdminController : ControllerBase
 {
-    // TODO: inyectar AdminService
+    private readonly AdminService _adminService;
 
-    // GET api/admin/users
-    // TODO: GetAllUsersAsync()
+    public AdminController(AdminService adminService)
+    {
+        _adminService = adminService;
+    }
 
-    // PATCH api/admin/users/{userId}/toggle-status
-    // TODO: ToggleUserStatusAsync(int userId)
+    [HttpGet("users")]
+    public async Task<IActionResult> GetAllUsers(
+        [FromQuery] string? role = null,
+        [FromQuery] bool? isActive = null)
+    {
+        var users = await _adminService.GetAllUsersAsync(role, isActive);
+        return Ok(ApiResponse.Ok(users));
+    }
 
-    // DELETE api/admin/users/{userId}
-    // TODO: DeleteUserAsync(int userId)
+    [HttpGet("users/{userId:int}")]
+    public async Task<IActionResult> GetUserById(int userId)
+    {
+        var user = await _adminService.GetUserByIdAsync(userId);
+        return Ok(ApiResponse.Ok(user));
+    }
 
-    // GET api/admin/stats
-    // TODO: GetStatsAsync()
+    [HttpPatch("users/{userId:int}/toggle-status")]
+    public async Task<IActionResult> ToggleUserStatus(int userId)
+    {
+        var user = await _adminService.ToggleUserStatusAsync(userId);
+        var estado = user.IsActive ? "activada" : "desactivada";
+        return Ok(ApiResponse.Ok(user, $"Cuenta {estado} correctamente."));
+    }
+
+    [HttpDelete("users/{userId:int}")]
+    public async Task<IActionResult> DeleteUser(int userId)
+    {
+        await _adminService.DeleteUserAsync(userId);
+        return Ok(ApiResponse.Ok("Usuario eliminado correctamente."));
+    }
+
+    [HttpGet("stats")]
+    public async Task<IActionResult> GetStats()
+    {
+        var stats = await _adminService.GetStatsAsync();
+        return Ok(ApiResponse.Ok(stats));
+    }
 }

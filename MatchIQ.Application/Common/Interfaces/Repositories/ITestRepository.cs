@@ -1,8 +1,7 @@
 using MatchIQ.Domain.Entities;
 
-namespace MatchIQ.Domain.Interfaces.Repositories;
+namespace MatchIQ.Application.Common.Interfaces.Repositories;
 
-// Contrato de acceso a datos para tests y preguntas
 public interface ITestRepository
 {
     Task<Test?> GetByOfferIdAsync(int offerId);

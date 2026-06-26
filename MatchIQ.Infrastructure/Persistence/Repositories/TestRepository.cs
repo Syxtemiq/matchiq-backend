@@ -1,24 +1,51 @@
+using MatchIQ.Application.Common.Interfaces.Repositories;
+using MatchIQ.Domain.Entities;
+using MatchIQ.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 namespace MatchIQ.Infrastructure.Persistence.Repositories;
 
-// Implementación del repositorio de tests y preguntas
-public class TestRepository // : ITestRepository
+public class TestRepository : ITestRepository
 {
-    // TODO: inyectar AppDbContext
+    private readonly AppDbContext _context;
 
-    // TODO: GetByOfferIdAsync → _context.Tests
-    //                                    .Include(t => t.Questions)
-    //                                    .FirstOrDefaultAsync(t => t.OfferId == offerId)
+    public TestRepository(AppDbContext context)
+    {
+        _context = context;
+    }
 
-    // TODO: CreateAsync → add + SaveChangesAsync
+    public async Task<Test?> GetByOfferIdAsync(int offerId) =>
+        await _context.Tests
+            .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
+            .FirstOrDefaultAsync(t => t.OfferId == offerId);
 
-    // TODO: GetQuestionByIdAsync → _context.TestQuestions.FindAsync(id)
+    public async Task<Test> CreateAsync(Test test)
+    {
+        _context.Tests.Add(test);
+        await _context.SaveChangesAsync();
+        return test;
+    }
 
-    // TODO: UpdateQuestionAsync → SaveChangesAsync (la entidad ya está tracked por EF)
+    public async Task<TestQuestion?> GetQuestionByIdAsync(int questionId) =>
+        await _context.TestQuestions
+            .Include(q => q.QuestionChatMessages.OrderBy(m => m.CreatedAt))
+            .FirstOrDefaultAsync(q => q.Id == questionId);
 
-    // TODO: GetChatHistoryAsync → _context.QuestionChatMessages
-    //                                      .Where(m => m.QuestionId == questionId)
-    //                                      .OrderBy(m => m.CreatedAt)
-    //                                      .ToListAsync()
+    public async Task UpdateQuestionAsync(TestQuestion question)
+    {
+        question.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+    }
 
-    // TODO: AddChatMessageAsync → add + SaveChangesAsync
+    public async Task<IEnumerable<QuestionChatMessage>> GetChatHistoryAsync(int questionId) =>
+        await _context.QuestionChatMessages
+            .Where(m => m.QuestionId == questionId)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync();
+
+    public async Task AddChatMessageAsync(QuestionChatMessage message)
+    {
+        _context.QuestionChatMessages.Add(message);
+        await _context.SaveChangesAsync();
+    }
 }

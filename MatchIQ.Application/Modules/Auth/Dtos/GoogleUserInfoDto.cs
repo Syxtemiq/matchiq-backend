@@ -1,7 +1,9 @@
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
-// Datos que llegan del proveedor Google OAuth
 public class GoogleUserInfoDto
 {
-    // TODO: GoogleId, Email, Name, PictureUrl
+    public string GoogleId { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Name { get; set; }
+    public string? PictureUrl { get; set; }
 }

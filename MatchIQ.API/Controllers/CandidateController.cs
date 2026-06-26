@@ -1,22 +1,37 @@
+using MatchIQ.API.Common;
+using MatchIQ.Application.Common.Interfaces;
+using MatchIQ.Application.Modules.Candidate;
+using MatchIQ.Application.Modules.Candidate.Dtos;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
 namespace MatchIQ.API.Controllers;
 
-// [ApiController]
-// [Route("api/candidate")]
-// [Authorize(Roles = "Candidate")]
-public class CandidateController // : ControllerBase
+[ApiController]
+[Route("api/candidate")]
+[Authorize(Roles = "Candidate")]
+public class CandidateController : ControllerBase
 {
-    // TODO: inyectar CandidateService
+    private readonly CandidateService _candidateService;
+    private readonly ICurrentUserService _currentUser;
 
-    // GET api/candidate/profile
-    // TODO: GetProfileAsync()
+    public CandidateController(CandidateService candidateService, ICurrentUserService currentUser)
+    {
+        _candidateService = candidateService;
+        _currentUser = currentUser;
+    }
 
-    // PUT api/candidate/profile
-    // TODO: UpdateProfileAsync([FromBody] UpdateCandidateDto dto)
+    [HttpGet("profile")]
+    public async Task<IActionResult> GetProfile()
+    {
+        var profile = await _candidateService.GetProfileAsync(_currentUser.UserId);
+        return Ok(ApiResponse.Ok(profile));
+    }
 
-    // GET api/candidate/test/{offerId}
-    // TODO: GetTestAsync(int offerId)
-    //       retorna el test SIN respuestas correctas
-
-    // POST api/candidate/test/{testId}/submit
-    // TODO: SubmitTestAsync(int testId, [FromBody] SubmitAnswersDto dto)
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateCandidateDto dto)
+    {
+        var profile = await _candidateService.UpdateProfileAsync(_currentUser.UserId, dto);
+        return Ok(ApiResponse.Ok(profile, "Perfil actualizado correctamente."));
+    }
 }

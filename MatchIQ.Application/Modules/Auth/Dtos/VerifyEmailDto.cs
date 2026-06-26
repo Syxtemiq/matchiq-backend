@@ -2,5 +2,6 @@ namespace MatchIQ.Application.Modules.Auth.Dtos;
 
 public class VerifyEmailDto
 {
-    // TODO: Email, Code (6 dígitos)
+    public string Email { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
 }
