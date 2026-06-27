@@ -160,8 +160,12 @@ public class OffersService
         if (offer.CompanyId != company.Id)
             throw new UnauthorizedAccessException("No tienes acceso a esta oferta.");
 
-        if (offer.Status != OfferStatus.Open)
-            throw new InvalidOperationException("Solo se pueden editar ofertas en estado Open.");
+        if (offer.Status != OfferStatus.Open && offer.Status != OfferStatus.PendingPayment)
+            throw new InvalidOperationException("Esta oferta no puede ser modificada.");
+
+        var hasTest = await _context.Tests.AnyAsync(t => t.OfferId == offerId);
+        if (hasTest)
+            throw new InvalidOperationException("La oferta ya tiene un test generado y no puede ser modificada.");
 
         if (dto.Title is not null)
         {
