@@ -1,6 +1,10 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using Npgsql;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
@@ -157,16 +161,10 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Ingresa el token JWT. Ejemplo: Bearer {token}"
+        Description = "Pega solo el token JWT (sin 'Bearer '). Swagger lo agrega automáticamente."
     });
 
-    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecuritySchemeReference("Bearer", doc),
-            []
-        }
-    });
+    options.OperationFilter<BearerAuthOperationFilter>();
 });
 
 builder.Services.AddControllers()
@@ -211,3 +209,26 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Añade el candado 🔒 solo a endpoints con [Authorize], respetando [AllowAnonymous]
+public class BearerAuthOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var hasAuthorize =
+            context.MethodInfo.DeclaringType!.GetCustomAttributes<AuthorizeAttribute>(true).Any()
+            || context.MethodInfo.GetCustomAttributes<AuthorizeAttribute>(true).Any();
+
+        var hasAllowAnonymous =
+            context.MethodInfo.GetCustomAttributes<AllowAnonymousAttribute>(true).Any();
+
+        if (!hasAuthorize || hasAllowAnonymous) return;
+
+        operation.Security = [
+            new OpenApiSecurityRequirement
+            {
+                { new OpenApiSecuritySchemeReference("Bearer"), [] }
+            }
+        ];
+    }
+}
