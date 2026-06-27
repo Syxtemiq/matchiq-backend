@@ -28,6 +28,10 @@ public class CreateOfferDto
     [Range(1, int.MaxValue, ErrorMessage = "El TierId debe ser un valor positivo.")]
     public int TierId { get; set; }
 
+    [Required]
+    [Range(1, 90, ErrorMessage = "El plazo para el test debe ser entre 1 y 90 días.")]
+    public int TestDeadlineDays { get; set; }
+
     public List<int> CategoryIds { get; set; } = [];
     public List<int> SkillIds { get; set; } = [];
 }

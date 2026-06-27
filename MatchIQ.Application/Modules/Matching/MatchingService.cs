@@ -137,7 +137,7 @@ public class MatchingService
                 $"El tier de esta oferta permite máximo {offer.CandidatesToTest} candidatos con test. " +
                 $"Ya tienes {alreadySent} y estás intentando agregar {matches.Count} más.");
 
-        var deadline = DateTime.UtcNow.AddHours(72);
+        var deadline = DateTime.UtcNow.AddDays(offer.TestDeadlineDays);
 
         foreach (var match in matches)
         {
