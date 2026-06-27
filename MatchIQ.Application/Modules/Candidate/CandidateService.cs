@@ -81,10 +81,18 @@ public class CandidateService
             profile.ExperienceYears = dto.ExperienceYears;
 
         if (dto.Seniority is not null)
-            profile.Seniority = Enum.Parse<Seniority>(dto.Seniority, ignoreCase: true);
+        {
+            if (!Enum.TryParse<Seniority>(dto.Seniority, ignoreCase: true, out var seniority))
+                throw new InvalidOperationException($"El seniority '{dto.Seniority}' no es válido. Valores aceptados: Junior, Mid, Senior.");
+            profile.Seniority = seniority;
+        }
 
         if (dto.EnglishLevel is not null)
-            profile.EnglishLevel = Enum.Parse<EnglishLevel>(dto.EnglishLevel, ignoreCase: true);
+        {
+            if (!Enum.TryParse<EnglishLevel>(dto.EnglishLevel, ignoreCase: true, out var englishLevel))
+                throw new InvalidOperationException($"El nivel de inglés '{dto.EnglishLevel}' no es válido. Valores aceptados: A1, A2, B1, B2, C1, C2.");
+            profile.EnglishLevel = englishLevel;
+        }
 
         if (dto.GithubLink is not null)
             profile.GithubLink = dto.GithubLink;

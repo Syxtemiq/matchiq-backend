@@ -435,7 +435,7 @@ public class MatchingService
             MatchId = match.Id,
             CandidateId = match.CandidateId,
             FullName = match.CandidateProfile.User.FullName ?? string.Empty,
-            Email = match.CandidateProfile.User.Email,
+            Email = match.Stage == MatchStage.Selected ? match.CandidateProfile.User.Email : null,
             ExperienceYears = match.CandidateProfile.ExperienceYears,
             EnglishLevel = match.CandidateProfile.EnglishLevel?.ToString(),
             MatchPercentage = match.MatchPercentage,

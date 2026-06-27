@@ -5,7 +5,7 @@ public class MatchResultDto
     public int MatchId { get; set; }
     public int CandidateId { get; set; }
     public string FullName { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public int? ExperienceYears { get; set; }
     public string? EnglishLevel { get; set; }
     public decimal? MatchPercentage { get; set; }

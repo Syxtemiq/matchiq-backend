@@ -25,12 +25,21 @@ public class MatchRepository : IMatchRepository
                 $"SELECT candidate_id AS \"CandidateId\", match_percentage AS \"MatchPercentage\" FROM get_candidate_matches({offerId})")
             .ToListAsync();
 
+        var existingMatches = await _context.Matches
+            .Where(m => m.OfferId == offerId)
+            .ToDictionaryAsync(m => m.CandidateId);
+
         foreach (var raw in rawResults)
         {
-            var existing = await _context.Matches
-                .FirstOrDefaultAsync(m => m.OfferId == offerId && m.CandidateId == raw.CandidateId);
-
-            if (existing is null)
+            if (existingMatches.TryGetValue(raw.CandidateId, out var existing))
+            {
+                if (existing.Stage == MatchStage.Matched)
+                {
+                    existing.MatchPercentage = raw.MatchPercentage;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            else
             {
                 _context.Matches.Add(new Match
                 {
@@ -40,11 +49,6 @@ public class MatchRepository : IMatchRepository
                     Stage = MatchStage.Matched,
                     UpdatedAt = DateTime.UtcNow
                 });
-            }
-            else if (existing.Stage == MatchStage.Matched)
-            {
-                existing.MatchPercentage = raw.MatchPercentage;
-                existing.UpdatedAt = DateTime.UtcNow;
             }
         }
 

@@ -6,43 +6,29 @@
 
 ## 🔴 CRÍTICOS (rompen funcionalidad)
 
-### ⚪ Incompatibilidad de strings SQL vs EF Core
-EF Core `HasConversion<string>()` guarda enums en PascalCase (`'Open'`, `'Pending'`, `'Matched'`), pero las funciones PostgreSQL comparan contra minúsculas (`'open'`, `'pending'`, `'matched'`). Consecuencias:
-- `trigger_rematch_open_offers` → nunca dispara → matching automático muerto
-- `expire_stale_offers()` → nunca encuentra registros → ofertas no expiran
-- `expire_stale_submissions()` → submissions no expiran
-- `get_full_offer_ranking` inserta `stage = 'matched'` (minúscula) → inconsistencia
+### ✅ Incompatibilidad de strings SQL vs EF Core
+Script `fix_sql_case.sql` ejecutado: datos normalizados a PascalCase, funciones PL/pgSQL recreadas, trigger rehecho, índices parciales actualizados.
 
-**Solución:** Ejecutar `CREATE OR REPLACE FUNCTION` con valores PascalCase en la BD (ya están en `DBContext.md`). No requiere cambios en C#.
+### ✅ `Enum.Parse` sin guard lanza 500 en `CandidateService`
+Reemplazado con `Enum.TryParse` en `CandidateService.cs`. Ahora retorna 400 con mensaje claro si el valor es inválido.
 
-### ⚪ `Enum.Parse` sin guard lanza 500 en `CandidateService`
-`CandidateService.cs:84-87` usa `Enum.Parse` (no `TryParse`). Lanza `ArgumentException`, que el middleware no captura → 500 en vez de 400.
-
-**Solución:** Reemplazar con `Enum.TryParse` igual que en `AuthService` y `OffersService`.
-
-### ⚪ Regeneración de test sin verificar estado de la oferta
-`TestService.GenerateTestAsync` con `forceRegenerate: true` no chequea si la oferta está en `TestSent`. Si la empresa regenera el test, se eliminan las preguntas que candidatos tienen activas.
-
-**Solución:** Bloquear `forceRegenerate` si `offer.Status != OfferStatus.Open`.
+### ✅ Regeneración de test sin verificar estado de la oferta
+`TestService.GenerateTestAsync` ahora bloquea `forceRegenerate` si `offer.Status != Open` con error 400.
 
 ---
 
 ## 🟠 SEGURIDAD
 
-### ⚪ Email del candidato expuesto sin importar el stage en `MatchResultDto`
-`MatchingService.cs:402` siempre incluye `Email = match.CandidateProfile.User.Email`. La privacidad (ocultar email hasta `Selected`) solo existe en la función SQL pero el C# la ignora.
-
-**Solución:** En `MapToDto`, devolver `Email = match.Stage == MatchStage.Selected ? match.CandidateProfile.User.Email : null`.
+### ✅ Email del candidato expuesto sin importar el stage en `MatchResultDto`
+`MatchingService.MapToDto` ahora devuelve `Email = null` hasta que `stage = Selected`. `MatchResultDto.Email` es `string?`.
 
 ### ⚪ Race condition en `SelectCandidateAsync`
 Cuenta candidatos seleccionados antes de guardar → dos requests simultáneos pueden ambos pasar el check y exceder `PositionsAvailable`.
 
 **Solución:** Usar una query atómica con `ExecuteSqlRaw` o mover el cierre de oferta a un UPDATE condicional en SQL.
 
-### ⚪ Código de verificación de email no es criptográficamente seguro
-`AuthService.cs:313` usa `Random.Shared.Next()` que es predecible.
-
-**Solución:** Reemplazar con `RandomNumberGenerator.GetInt32(100_000, 1_000_000)`.
+### ✅ Código de verificación de email no es criptográficamente seguro
+`AuthService.GenerateSixDigitCode` ahora usa `RandomNumberGenerator.GetInt32()`.
 
 ---
 
@@ -57,10 +43,8 @@ Un candidato puede ser expirado por el job antes de que venza su `TimeLimitMinut
 
 **Solución:** Definir un solo mecanismo. El recomendado: el `Deadline` se calcula como `StartedAt + TimeLimitMinutes` cuando el candidato hace `StartTest`, no al enviar. El check en `SubmitAnswers` se elimina y se confía en el `Deadline`.
 
-### ⚪ `DailyJobsService` no corre al arrancar el servidor
-El `PeriodicTimer` espera 24h antes del primer tick. Submissions/ofertas expiradas durante downtime no se procesan hasta el día siguiente.
-
-**Solución:** Llamar `RunJobsAsync` al inicio de `ExecuteAsync` antes de entrar al loop del timer.
+### ✅ `DailyJobsService` no corre al arrancar el servidor
+`ExecuteAsync` ahora llama `RunJobsAsync` inmediatamente al arrancar, antes de entrar al loop del timer.
 
 ### ⚪ Google login ignora silenciosamente conflicto de rol
 Si un usuario ya existe como Candidate y hace login con Google enviando `role: "Company"`, se loguea como Candidate sin ningún aviso.
@@ -76,10 +60,8 @@ Si un usuario ya existe como Candidate y hace login con Google enviando `role: "
 
 **Solución:** Agregar parámetros `page` y `pageSize` con un máximo configurable.
 
-### ⚪ N+1 queries en `MatchRepository.RunMatchingAsync`
-Por cada candidato de `get_candidate_matches`, se hace una query separada para verificar si ya existe el match. Con 200 candidatos = 200 queries extra.
-
-**Solución:** Cargar todos los matches existentes de la oferta en una sola query antes del loop, y comparar en memoria con un `HashSet<int>`.
+### ✅ N+1 queries en `MatchRepository.RunMatchingAsync`
+Ahora carga todos los matches existentes de la oferta en una sola query (`ToDictionaryAsync`) antes del loop. De N+1 queries a 2 queries fijas.
 
 ### ⚪ Chat del editor de preguntas guarda respuesta genérica
 `TestEditorService.cs:71` siempre guarda `"He actualizado la pregunta según tu solicitud."` en el historial. El admin no puede ver qué hizo la IA.
