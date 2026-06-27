@@ -83,6 +83,8 @@ public class OffersController : ControllerBase
     public async Task<IActionResult> CancelOffer(int id)
     {
         var result = await _offersService.CancelOfferAsync(_currentUser.UserId, id);
+        if (!result.Cancelled)
+            return Conflict(ApiResponse.Fail(result.Warning ?? "No se pudo cancelar la oferta.", result));
         return Ok(ApiResponse.Ok(result, "Oferta cancelada correctamente."));
     }
 
