@@ -1,9 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
-using MatchIQ.Domain.Enums;
 using Npgsql;
-using Npgsql.NameTranslation;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
@@ -31,21 +29,10 @@ using OpenAI.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Base de datos ─────────────────────────────────────────────────────────────
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true); 
+
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(
     builder.Configuration.GetConnectionString("DefaultConnection")!);
-
-// Mapeo de enums de PostgreSQL — sin esto EF Core envía text y PostgreSQL rechaza el cast
-dataSourceBuilder.MapEnum<UserRole>("user_role_enum");
-dataSourceBuilder.MapEnum<Seniority>("seniority_enum");
-dataSourceBuilder.MapEnum<Modality>("modality_enum");
-dataSourceBuilder.MapEnum<OfferStatus>("offer_status_enum");
-dataSourceBuilder.MapEnum<MatchStage>("match_stage_enum");
-dataSourceBuilder.MapEnum<SubmissionStatus>("submission_status_enum");
-dataSourceBuilder.MapEnum<PaymentStatus>("payment_status_enum");
-dataSourceBuilder.MapEnum<QuestionType>("question_type_enum");
-dataSourceBuilder.MapEnum<ChatRole>("chat_role_enum");
-// EnglishLevel usa labels en mayúsculas ('A1','A2'...) — se preserva el nombre C# tal cual
-dataSourceBuilder.MapEnum<EnglishLevel>("english_level_enum", new NpgsqlNullNameTranslator());
 
 var npgsqlDataSource = dataSourceBuilder.Build();
 
@@ -76,7 +63,6 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Login, register, forgot-password, reset-password: 5 intentos/min por IP
     options.AddPolicy("auth-strict", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -88,7 +74,6 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
-    // Verify-email, refresh, google-login: 15 intentos/min por IP
     options.AddPolicy("auth-general", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -100,7 +85,6 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
-    // Pagos: 5 intentos/5min por usuario autenticado (o IP si no hay token)
     options.AddPolicy("payment", context =>
     {
         var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
@@ -122,7 +106,6 @@ builder.Services.AddOpenAIService(settings =>
 });
 
 // ── Inyección de dependencias ─────────────────────────────────────────────────
-// Application Services
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CandidateService>();
 builder.Services.AddScoped<CompanyService>();
@@ -132,7 +115,6 @@ builder.Services.AddScoped<TestService>();
 builder.Services.AddScoped<TestEditorService>();
 builder.Services.AddScoped<AdminService>();
 
-// Infrastructure Services
 builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -145,15 +127,11 @@ builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<ITestRepository, TestRepository>();
 
-// Current user (lectura de claims del JWT via IHttpContextAccessor)
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-
-// Background jobs diarios
 builder.Services.AddHostedService<DailyJobsService>();
 
-// ── CORS para Flutter Web ─────────────────────────────────────────────────────
-// TODO: configurar origins reales cuando se tenga la URL del frontend
+// ── CORS ──────────────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FlutterWeb", policy =>
@@ -197,8 +175,6 @@ builder.Services.AddControllers()
     })
     .ConfigureApiBehaviorOptions(options =>
     {
-        // Unifica los errores de validación de DTOs con el mismo ApiResponse<T>
-        // que usa el resto de la API — sin esto, [ApiController] devolvería ProblemDetails
         options.InvalidModelStateResponseFactory = context =>
         {
             var firstError = context.ModelState
