@@ -30,6 +30,7 @@ Todos los endpoints devuelven este contrato sin excepción — incluyendo errore
 | `400` | Input inválido, regla de negocio violada, estado incorrecto |
 | `401` | Sin token, token expirado, o sin permiso de rol |
 | `404` | Recurso no encontrado |
+| `409` | Conflicto de estado — requiere confirmación del usuario antes de continuar |
 | `429` | Rate limit excedido — esperar al menos 60 segundos antes de reintentar |
 | `500` | Error interno del servidor |
 
@@ -56,6 +57,14 @@ Todos los endpoints devuelven este contrato sin excepción — incluyendo errore
 - 👤 **Candidate** — solo candidatos
 - 🏢 **Company** — solo empresas
 - 🛡️ **Admin** — solo administradores
+
+---
+
+## Regla clave: ventana de edición de oferta
+
+> **Todo puede editarse mientras la oferta esté en `PendingPayment`** (antes de pagar): detalles de la oferta, generar/regenerar test completo, editar preguntas individualmente.
+>
+> **Una vez pagada (`Open` en adelante), nada puede modificarse.** El pago es el punto de no retorno. Para hacer una nueva reclutación con cambios, la empresa debe crear una nueva oferta.
 
 ---
 
@@ -588,7 +597,7 @@ La empresa escribe una descripción libre del cargo y la IA extrae los campos. �
 ### 18. Crear oferta
 `POST /api/offers` · 🏢 Company
 
-La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pagar (ver `/api/payments/create-checkout`).
+La oferta se crea en estado `PendingPayment`. En este estado la empresa puede editar libremente la oferta, generar el test y ajustar las preguntas. Al pagar, todo queda bloqueado.
 
 **Body:**
 ```json
@@ -601,6 +610,7 @@ La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pa
   "requiredEnglishLevel": "B2",
   "positionsAvailable": 2,
   "tierId": 3,
+  "testDeadlineDays": 3,
   "categoryIds": [1, 2],
   "skillIds": [4, 9, 10]
 }
@@ -616,6 +626,7 @@ La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pa
 | `requiredEnglishLevel` | Opcional · `"A1"` – `"C2"` |
 | `positionsAvailable` | Entero ≥ 1 (default: 1) |
 | `tierId` | Requerido · entero positivo |
+| `testDeadlineDays` | Requerido · entero entre 1 y 90 · días que tendrá el candidato para abrir y comenzar el test desde que se le envía |
 | `categoryIds` | Opcional · lista de IDs de categoría |
 | `skillIds` | Opcional · lista de IDs de skill |
 
@@ -636,14 +647,13 @@ La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pa
     "tierName": "Estándar",
     "tierPriceCop": 349000,
     "candidatesToTest": null,
+    "testDeadlineDays": 3,
     "status": "PendingPayment",
     "createdAt": "2026-06-25T14:00:00Z",
     "paidAt": null,
     "expiresAt": null,
-    "testSentAt": null,
     "categories": [{ "id": 1, "name": "FrontEnd" }],
-    "skills": [{ "id": 4, "name": "React", "categoryId": 1 }],
-    "checkoutUrl": null
+    "skills": [{ "id": 4, "name": "React", "categoryId": 1 }]
   },
   "message": "Oferta creada correctamente."
 }
@@ -655,6 +665,7 @@ La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pa
 |---|---|
 | 400 | `"La modalidad debe ser remote, onsite o hybrid."` |
 | 400 | `"El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2."` |
+| 400 | `"El plazo para el test debe ser entre 1 y 90 días."` |
 | 400 | `"Debe haber al menos 1 posición disponible."` |
 | 400 | `"Debes completar tu perfil de empresa antes de crear una oferta."` |
 | 400 | `"Debes completar el nombre de la empresa antes de crear una oferta."` |
@@ -686,7 +697,7 @@ La oferta se crea en estado `PendingPayment`. Para activarla, la empresa debe pa
 ### 21. Editar oferta
 `PUT /api/offers/{id}` · 🏢 Company
 
-Solo se pueden editar ofertas en estado `Open`. Todos los campos son opcionales — solo se actualizan los que se envíen.
+**Solo disponible mientras la oferta esté en `PendingPayment`.** Una vez pagada, la oferta es inmutable. Todos los campos son opcionales — solo se actualizan los que se envíen.
 
 **Body:**
 ```json
@@ -716,7 +727,7 @@ Solo se pueden editar ofertas en estado `Open`. Todos los campos son opcionales 
 
 | HTTP | `message` |
 |---|---|
-| 400 | `"Solo se pueden editar ofertas en estado Open."` |
+| 400 | `"La oferta no puede ser modificada una vez que ha sido activada."` |
 | 400 | `"El título no puede estar vacío."` |
 | 400 | `"La modalidad debe ser remote, onsite o hybrid."` |
 | 400 | `"El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2."` |
@@ -731,19 +742,24 @@ Solo se pueden editar ofertas en estado `Open`. Todos los campos son opcionales 
 
 **Sin body.**
 
-**Respuesta exitosa:**
+**Respuesta exitosa (cancelación directa):**
 ```json
 {
   "success": true,
-  "data": {
-    "cancelled": true,
-    "warning": "Hay 2 candidatos en proceso de test. Al cancelar, sus submissions quedarán sin evaluar.",
-    "candidatesInProgress": 2
-  },
+  "data": { "cancelled": true, "warning": null, "candidatesInProgress": 0 },
   "message": "Oferta cancelada correctamente."
 }
 ```
-> Si `warning` no es null, muéstrale una confirmación al usuario. Si confirma, llamar `force-cancel`.
+
+**Respuesta 409 (hay candidatos en proceso — requiere confirmación):**
+```json
+{
+  "success": false,
+  "data": { "cancelled": false, "warning": "Hay 2 candidato(s) con un test en proceso. ¿Confirmas la cancelación?", "candidatesInProgress": 2 },
+  "message": "Hay 2 candidato(s) con un test en proceso. ¿Confirmas la cancelación?"
+}
+```
+> Si recibes `409`, mostrar un diálogo de confirmación con el `warning`. Si el usuario confirma, llamar a `force-cancel`.
 
 **Errores posibles:**
 
@@ -789,7 +805,7 @@ La oferta debe estar en estado `PendingPayment`. Si ya se generó un link antes,
 ```json
 { "success": true, "data": { "url": "https://checkout.wompi.co/l/..." }, "message": null }
 ```
-> Redirige al usuario a esa URL. Al pagar, el webhook activa la oferta automáticamente y corre el matching inicial.
+> Redirige al usuario a esa URL. Al pagar, el webhook activa la oferta automáticamente, corre el matching inicial y bloquea cualquier edición futura.
 
 ---
 
@@ -820,7 +836,7 @@ Base path: `/api/matching`
       "matchId": 12,
       "candidateId": 5,
       "fullName": "Juan Pérez",
-      "email": "juan@email.com",
+      "email": null,
       "experienceYears": 3,
       "englishLevel": "B2",
       "matchPercentage": 87.50,
@@ -840,9 +856,9 @@ Base path: `/api/matching`
 }
 ```
 > Lista ordenada por `adjustedScore` desc (o `matchPercentage` si no hay score de IA).
-> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` — solo el top 3 recibe evaluación automática de fit antes del test.
-> `testScore` y `testFeedback` son `null` hasta que el candidato complete y envíe el test (`stage = "TestCompleted"` o `"Selected"`). Son el score 0–100 y el feedback resumen que generó la IA al evaluar las respuestas.
-> El email real del candidato solo está visible cuando `stage = "Selected"`.
+> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` — solo el top 3 recibe evaluación automática de fit.
+> `testScore` y `testFeedback` son `null` hasta que el candidato complete el test (`stage = "TestCompleted"` o `"Selected"`).
+> `email` es `null` en todos los stages excepto `"Selected"`.
 
 **Errores posibles:**
 
@@ -875,7 +891,7 @@ Corre el matching incremental (solo candidatos nuevos sin match previo). Normalm
 ### 28. Reevaluar ranking completo
 `POST /api/matching/{offerId}/reevaluate` · 🏢 Company
 
-Recalcula el score de TODOS los candidatos. Útil cuando la oferta fue editada.
+Recalcula el score de TODOS los candidatos.
 
 **Sin body.**
 
@@ -897,7 +913,7 @@ Recalcula el score de TODOS los candidatos. Útil cuando la oferta fue editada.
 ### 29. Enviar test a candidatos
 `POST /api/matching/send-test` · 🏢 Company
 
-Los candidatos reciben un email con link directo al test. Solo se puede enviar a candidatos en stage `Matched`.
+Los candidatos reciben un email con link directo al test. Solo se puede enviar a candidatos en stage `Matched`. El candidato tendrá `testDeadlineDays` días (definido al crear la oferta) para abrir el test.
 
 **Body:**
 ```json
@@ -930,7 +946,7 @@ Los candidatos reciben un email con link directo al test. Solo se puede enviar a
 ### 30. Seleccionar candidato
 `POST /api/matching/{matchId}/select` · 🏢 Company
 
-Solo desde stage `TestCompleted`. Si al seleccionar se llenan todas las posiciones disponibles, la oferta pasa a `Completed` automáticamente. El candidato recibe un email de notificación (best-effort — si el envío falla, la selección igual se guarda).
+Solo desde stage `TestCompleted`. Si al seleccionar se llenan todas las posiciones disponibles, la oferta pasa a `Completed` automáticamente. El candidato recibe un email de notificación (best-effort).
 
 **Sin body.**
 
@@ -983,9 +999,16 @@ Base path: `/api/tests`
 ### 32. Generar test con IA
 `POST /api/tests/{offerId}/generate` · 🏢 Company
 
-Genera el test técnico para la oferta. Se hace una sola vez; para reemplazarlo usar `regenerate`.
+Genera el test técnico para la oferta usando IA. Disponible en `PendingPayment` (para preview antes de pagar) y en `Open` si aún no existe test. Si ya existe un test, retorna el existente sin llamar a la IA.
 
-**Sin body.**
+**Body:**
+```json
+{ "timeLimitMinutes": 45 }
+```
+
+| Campo | Reglas |
+|---|---|
+| `timeLimitMinutes` | Requerido · entero ≥ 1 · minutos que tendrá el candidato para completar el test una vez que lo inicie |
 
 **Respuesta exitosa:**
 ```json
@@ -1034,14 +1057,40 @@ Genera el test técnico para la oferta. Se hace una sola vez; para reemplazarlo 
 }
 ```
 
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El tiempo límite debe ser al menos 1 minuto."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
+
 ---
 
-### 33. Regenerar test
+### 33. Regenerar test completo
 `POST /api/tests/{offerId}/regenerate` · 🏢 Company
 
-Reemplaza el test existente con uno nuevo generado por IA. **Borra el test anterior.**
+Reemplaza el test existente con uno completamente nuevo generado por IA. **Borra el test anterior y todo su historial de chat.** Solo disponible en `PendingPayment` — una vez pagada la oferta, no se puede regenerar.
 
-**Sin body.** Respuesta igual que generar.
+**Body:**
+```json
+{ "timeLimitMinutes": 60 }
+```
+
+| Campo | Reglas |
+|---|---|
+| `timeLimitMinutes` | Requerido · entero ≥ 1 |
+
+**Respuesta:** igual que generar test.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se puede regenerar el test después de haber activado la oferta."` |
+| 400 | `"El tiempo límite debe ser al menos 1 minuto."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
@@ -1070,7 +1119,7 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
   "success": true,
   "data": [
     { "role": "admin", "content": "Cambia el nivel a más difícil", "createdAt": "2026-06-25T15:00:00Z" },
-    { "role": "assistant", "content": "Entendido, aquí la nueva versión...", "createdAt": "2026-06-25T15:00:05Z" }
+    { "role": "assistant", "content": "He actualizado la pregunta según tu solicitud.", "createdAt": "2026-06-25T15:00:05Z" }
   ],
   "message": null
 }
@@ -1080,6 +1129,8 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
 
 ### 36. Editar pregunta con IA (chat)
 `POST /api/tests/questions/{questionId}/chat` · 🏢 Company
+
+Permite modificar una pregunta específica mediante instrucciones en lenguaje natural. **Solo disponible en `PendingPayment`** — una vez pagada la oferta, las preguntas son inmutables.
 
 **Body:**
 ```json
@@ -1096,11 +1147,20 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
   "success": true,
   "data": {
     "updatedQuestion": { /* objeto QuestionDto con la pregunta actualizada */ },
-    "assistantMessage": "Actualicé la pregunta para incluir useEffect y useCallback..."
+    "assistantMessage": "He actualizado la pregunta según tu solicitud."
   },
   "message": null
 }
 ```
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"El mensaje no puede estar vacío."` |
+| 400 | `"No se pueden modificar preguntas una vez que la oferta ha sido activada."` |
+| 401 | `"No tienes acceso a esta pregunta."` |
+| 404 | `"Pregunta no encontrada."` |
 
 ---
 
@@ -1143,7 +1203,7 @@ Devuelve todos los tests a los que el candidato ha sido invitado, ordenados por 
 
 > **Lógica de estado en el frontend:**
 > - `status = "Pending"` + `startedAt = null` → **Sin realizar** (mostrar botón "Ir al test")
-> - `status = "Pending"` + `startedAt != null` → **En curso** (mostrar botón "Continuar")
+> - `status = "Pending"` + `startedAt != null` → **En curso o evaluación pendiente** (mostrar botón "Continuar" o mensaje "Resultado próximamente")
 > - `status = "Evaluated"` → **Completado** (mostrar score y botón "Ver resultado")
 > - `status = "Expired"` → **Expirado** (mostrar mensaje, sin acción)
 >
@@ -1190,10 +1250,10 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 38. Iniciar test y obtener preguntas (candidato)
+### 39. Iniciar test y obtener preguntas (candidato)
 `POST /api/tests/{offerId}/candidate/start` · 👤 Candidate
 
-**Sin body.** Registra `startedAt` en el primer acceso e inicia el cronómetro. Devuelve las preguntas **sin** respuestas correctas ni hints. Llamar únicamente cuando el candidato confirme "quiero empezar" — no hay vuelta atrás.
+**Sin body.** Registra `startedAt` en el primer acceso y recalcula el deadline al `startedAt + timeLimitMinutes`. Devuelve las preguntas **sin** respuestas correctas ni hints. Llamar únicamente cuando el candidato confirme "quiero empezar" — no hay vuelta atrás.
 
 **Respuesta exitosa:** igual que generar test, pero `correctAnswer`, `explanation`, `isGorilla` y `gorillaHint` siempre vienen `null`.
 
@@ -1209,7 +1269,7 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 39. Enviar respuestas
+### 40. Enviar respuestas
 `POST /api/tests/{testId}/submit` · 👤 Candidate
 
 **Body:**
@@ -1224,12 +1284,12 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 | Campo | Reglas |
 |---|---|
-| `answers` | Requerido |
+| `answers` | Requerido · al menos 1 respuesta |
 | `answers[].questionId` | Entero positivo |
 | `answers[].selectedOption` | Opcional · solo `"A"`, `"B"`, `"C"` o `"D"` (para MultipleChoice) |
 | `answers[].codeSubmitted` | Opcional · código libre (para CodeChallenge) |
 
-**Respuesta exitosa:**
+**Respuesta exitosa — evaluación completada:**
 ```json
 {
   "success": true,
@@ -1248,21 +1308,37 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 }
 ```
 
+**Respuesta exitosa — evaluación en cola (IA falló temporalmente):**
+```json
+{
+  "success": true,
+  "data": {
+    "score": null,
+    "feedback": null,
+    "status": "Pending",
+    "submittedAt": "2026-06-25T16:00:00Z",
+    "aiEvaluatedAt": null,
+    "questionResults": []
+  },
+  "message": "Respuestas enviadas y evaluadas correctamente."
+}
+```
+> Si `status = "Pending"`, las respuestas fueron guardadas pero la evaluación de IA está en proceso. El backend reintenta automáticamente cada 24h. El candidato puede consultar `GET /api/tests/{testId}/result` más tarde para ver el score.
+
 **Errores posibles:**
 
 | HTTP | `message` |
 |---|---|
 | 400 | `"Debes incluir al menos una respuesta."` |
-| 400 | `"La opción seleccionada debe ser A, B, C o D."` |
+| 400 | `"Tus respuestas ya fueron recibidas. El resultado estará disponible pronto."` |
 | 400 | `"El plazo para rendir este test ha expirado."` |
-| 400 | `"Tiempo agotado. El test debía completarse en X minutos."` |
 | 400 | `"Ya enviaste tus respuestas."` |
 | 401 | `"No tienes una submission activa para este test."` |
 | 404 | `"Perfil de candidato no encontrado."` |
 
 ---
 
-### 40. Ver resultado de un test
+### 41. Ver resultado de un test
 `GET /api/tests/{testId}/result` · 👤 Candidate
 
 Devuelve el resultado si ya fue evaluado.
@@ -1273,6 +1349,7 @@ Devuelve el resultado si ya fue evaluado.
 
 | HTTP | `message` |
 |---|---|
+| 400 | `"Tus respuestas fueron recibidas. El resultado estará disponible pronto."` |
 | 400 | `"Aún no has enviado tus respuestas."` |
 | 401 | `"No tienes una submission para este test."` |
 | 404 | `"Perfil de candidato no encontrado."` |
@@ -1287,7 +1364,7 @@ Base path: `/api/admin`
 
 ---
 
-### 40. Listar usuarios
+### 42. Listar usuarios
 `GET /api/admin/users` · 🛡️ Admin
 
 **Query params opcionales:**
@@ -1320,7 +1397,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 41. Ver usuario por ID
+### 43. Ver usuario por ID
 `GET /api/admin/users/{userId}` · 🛡️ Admin
 
 **Respuesta exitosa:** objeto igual al de la lista.
@@ -1333,7 +1410,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 42. Crear administrador
+### 44. Crear administrador
 `POST /api/admin/users` · 🛡️ Admin
 
 Único endpoint para crear cuentas de tipo Admin. El registro público bloquea este rol.
@@ -1373,7 +1450,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 43. Activar / desactivar cuenta
+### 45. Activar / desactivar cuenta
 `PATCH /api/admin/users/{userId}/toggle-status` · 🛡️ Admin
 
 **Sin body.**
@@ -1392,7 +1469,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 44. Eliminar usuario
+### 46. Eliminar usuario
 `DELETE /api/admin/users/{userId}` · 🛡️ Admin
 
 Elimina en cascada: perfil, ofertas, matches, submissions, etc.
@@ -1413,7 +1490,7 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 
 ---
 
-### 45. Estadísticas del sistema
+### 47. Estadísticas del sistema
 `GET /api/admin/stats` · 🛡️ Admin
 
 **Respuesta exitosa:**
@@ -1453,17 +1530,27 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 1.  register → 2. verify-email → 3. login
 4.  company/profile (PUT) — completar nombre de empresa
 5.  catalog/categories + catalog/categories/{id}/skills — cargar catálogo
-6.  offers/tiers — mostrar opciones de precio
+6.  offers/tiers — mostrar opciones de precio al usuario
 7.  offers/parse-description (opcional) — pre-llenar formulario con IA
-8.  offers (POST) — crear oferta → queda en PendingPayment
-9.  payments/create-checkout?offerId=X → redirigir al usuario a Wompi
-    [Wompi confirma el pago → webhook activa la oferta → corre matching inicial]
-10. tests/{offerId}/generate — generar test técnico
-11. tests/questions/{id}/chat (POST) — ajustar preguntas con IA (opcional)
-12. matching/{offerId} (GET) — ver ranking de candidatos
-13. matching/send-test (POST) — enviar test a candidatos seleccionados
-14. matching/{offerId} (GET) — ver ranking con `testScore` y `testFeedback` de quienes completaron el test
-15. matching/{matchId}/select o /reject — decisión final basada en score del test
+
+── VENTANA DE EDICIÓN LIBRE (todo en PendingPayment) ──────────────────────────
+8.  offers (POST) — crear oferta con testDeadlineDays → queda en PendingPayment
+9.  tests/{offerId}/generate (POST con { timeLimitMinutes }) — generar test con IA
+10. tests/questions/{id}/chat (POST) — ajustar preguntas individualmente (opcional)
+    tests/{offerId}/regenerate (POST con { timeLimitMinutes }) — regenerar test completo (opcional)
+    offers/{id} (PUT) — editar detalles de la oferta si es necesario (opcional)
+    → Repetir 9-10 hasta quedar conforme
+
+── PAGO = PUNTO DE NO RETORNO ─────────────────────────────────────────────────
+11. payments/create-checkout?offerId=X → redirigir al usuario a Wompi
+    [Wompi confirma el pago → webhook activa oferta (Open) → matching inicial corre automático]
+    [A partir de aquí: oferta, test y preguntas son inmutables]
+
+── PROCESO DE SELECCIÓN ────────────────────────────────────────────────────────
+12. matching/{offerId} (GET) — ver ranking de candidatos matcheados
+13. matching/send-test (POST) — enviar test a candidatos seleccionados del ranking
+14. matching/{offerId} (GET) — ver ranking con testScore y testFeedback de quienes completaron
+15. matching/{matchId}/select o /reject — decisión final basada en el test
 ```
 
 ### Flujo Candidato (Candidate)
@@ -1473,13 +1560,27 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
    [El sistema evalúa al candidato contra todas las ofertas abiertas]
    [Candidato recibe email de invitación cuando la empresa le envía el test]
 5. tests/candidate (GET) — sección "Mis tests": lista todos sus tests con estado
-   [Sin realizar / En curso / Completado / Expirado]
-6. tests/{offerId}/candidate/preview (GET) — ver resumen del test (sin iniciar cronómetro)
-   [Mostrar: título, tiempo límite, número y tipos de preguntas]
-   [El candidato confirma "Quiero empezar"]
-7. tests/{offerId}/candidate/start (POST) — iniciar test formalmente (inicia cronómetro)
+6. tests/{offerId}/candidate/preview (GET) — ver resumen antes de empezar (sin iniciar cronómetro)
+7. tests/{offerId}/candidate/start (POST) — confirmar inicio (inicia cronómetro real en backend)
 8. tests/{testId}/submit (POST) — enviar respuestas
 9. tests/{testId}/result (GET) — ver calificación y feedback
+   [Candidato recibe email si es seleccionado o rechazado]
+```
+
+---
+
+## STRIP DE PRUEBAS (Wompi)
+
+```
+Pago exitoso          4242 4242 4242 4242
+Pago declinado        4000 0000 0000 0002
+Fondos insuficientes  4000 0000 0000 9995
+Tarjeta expirada      4000 0000 0000 0069
+CVC incorrecto        4000 0000 0000 0127
+
+En todos usar:
+  Fecha: cualquiera futura (ej. 12/29)
+  CVC: cualquier 3 dígitos
 ```
 
 ---
@@ -1487,10 +1588,21 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 ## Notas de implementación
 
 1. **Manejo del token:** al recibir `401`, intentar renovar con `/api/auth/refresh`. Si el refresh también falla, redirigir al login.
-2. **Tiempo del test:** guardar `timeLimitMinutes` desde la respuesta de `preview`. Al hacer `start`, comenzar el contador en el cliente. Si el tiempo corre, el backend rechaza el submit con `400` y marca la submission como expirada.
+
+2. **Cronómetro del test:** el deadline real lo calcula el backend al hacer `start` (`startedAt + timeLimitMinutes`). Mostrar un countdown en el cliente con base en `timeLimitMinutes` desde que se llama `start`, pero no confiar en él para forzar el submit — el backend es la fuente de verdad. Si el candidato intenta hacer submit después del deadline, el DailyJob ya habrá marcado la submission como `Expired`.
+
 3. **Flujo de test en dos pasos:** llamar `preview` para mostrar qué le espera al candidato. Solo llamar `start` cuando el candidato confirme explícitamente — ese POST registra `startedAt` y no hay vuelta atrás.
-4. **Estado de la oferta:** cuando `status = "PendingPayment"`, mostrar el botón de pago. `checkoutUrl` puede ser `null` si aún no se generó el link — llamar `create-checkout` para obtenerlo.
-5. **Email del candidato en matching:** el email real solo aparece cuando `stage = "Selected"`. En etapas anteriores puede venir enmascarado.
-6. **Score del test en matching:** `testScore` y `testFeedback` son `null` mientras el candidato no haya enviado sus respuestas. Aparecen automáticamente en `GET /api/matching/{offerId}` en cuanto el candidato completa el test — no hay que hacer ninguna llamada extra. Usarlos para la pantalla de decisión (select/reject).
-7. **Rate limits:** al recibir `429`, esperar al menos 60 segundos antes de reintentar. No mostrar un spinner — informar al usuario.
-8. **Catálogo:** cargar categorías y skills una sola vez al iniciar la app y cachear — no cambian con frecuencia.
+
+4. **Estado de la oferta:** cuando `status = "PendingPayment"`, mostrar el botón de pago y permitir edición libre. Una vez en `Open` o posterior, todo es solo lectura para la empresa.
+
+5. **Email del candidato en matching:** el email real solo aparece cuando `stage = "Selected"`. En etapas anteriores viene `null`.
+
+6. **Score del test en matching:** `testScore` y `testFeedback` son `null` mientras el candidato no haya enviado sus respuestas. Aparecen automáticamente en `GET /api/matching/{offerId}` en cuanto el candidato completa el test.
+
+7. **Submit con evaluación pendiente:** si el backend devuelve `status = "Pending"` en la respuesta de submit (IA no disponible temporalmente), mostrar un mensaje amigable: "Tus respuestas fueron recibidas. Tu resultado estará disponible pronto." El backend reintenta la evaluación automáticamente cada 24h.
+
+8. **Cancelación con advertencia (409):** al recibir 409 en `PATCH /cancel`, mostrar un diálogo con el `data.warning` y dos opciones: "Cancelar de todas formas" (llama `force-cancel`) y "Volver" (no hace nada).
+
+9. **Rate limits:** al recibir `429`, esperar al menos 60 segundos antes de reintentar. No mostrar un spinner infinito — informar al usuario con un contador.
+
+10. **Catálogo:** cargar categorías y skills una sola vez al iniciar la app y cachear — no cambian con frecuencia.
