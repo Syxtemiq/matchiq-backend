@@ -22,7 +22,7 @@ public class TestService
         _aiService = aiService;
     }
 
-    public async Task<TestDto> GenerateTestAsync(int offerId, int userId, bool forceRegenerate = false)
+    public async Task<TestDto> GenerateTestAsync(int offerId, int userId, int timeLimitMinutes, bool forceRegenerate = false)
     {
         var offer = await LoadOfferForAIAsync(offerId)
             ?? throw new KeyNotFoundException("Oferta no encontrada.");
@@ -50,7 +50,7 @@ public class TestService
         {
             OfferId = offerId,
             Title = generated.Title,
-            TimeLimitMinutes = generated.TimeLimitMinutes
+            TimeLimitMinutes = timeLimitMinutes
         };
 
         await _testRepository.CreateAsync(test);
@@ -132,6 +132,7 @@ public class TestService
         if (submission.StartedAt is null)
         {
             submission.StartedAt = DateTime.UtcNow;
+            submission.Deadline = submission.StartedAt.Value.AddMinutes(test.TimeLimitMinutes);
             await _context.SaveChangesAsync();
         }
 
@@ -160,19 +161,6 @@ public class TestService
             .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
             .FirstOrDefaultAsync(t => t.Id == testId)
             ?? throw new KeyNotFoundException("Test no encontrado.");
-
-        // Verificar límite de tiempo desde que el candidato inició el test
-        if (submission.StartedAt.HasValue)
-        {
-            var elapsed = DateTime.UtcNow - submission.StartedAt.Value;
-            if (elapsed.TotalMinutes > test.TimeLimitMinutes)
-            {
-                submission.Status = SubmissionStatus.Expired;
-                await _context.SaveChangesAsync();
-                throw new InvalidOperationException(
-                    $"Tiempo agotado. El test debía completarse en {test.TimeLimitMinutes} minutos.");
-            }
-        }
 
         submission.AnswersJson = JsonSerializer.Serialize(dto.Answers);
         submission.SubmittedAt = DateTime.UtcNow;

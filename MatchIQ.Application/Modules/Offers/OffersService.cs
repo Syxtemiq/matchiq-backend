@@ -90,6 +90,7 @@ public class OffersService
             PositionsAvailable = dto.PositionsAvailable,
             TierId = dto.TierId,
             CandidatesToTest = tier.MaxCandidates,
+            TestDeadlineDays = dto.TestDeadlineDays,
             Status = OfferStatus.PendingPayment
         };
 
@@ -284,6 +285,7 @@ public class OffersService
         TierName = offer.PricingTier.Name,
         TierPriceCop = offer.PricingTier.PriceCop,
         CandidatesToTest = offer.CandidatesToTest,
+        TestDeadlineDays = offer.TestDeadlineDays,
         Status = offer.Status.ToString(),
         CreatedAt = offer.CreatedAt,
         PaidAt = offer.PaidAt,
