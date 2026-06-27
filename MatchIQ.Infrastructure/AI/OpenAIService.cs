@@ -18,7 +18,8 @@ public class OpenAIService : IAIService
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
     public OpenAIService(IOpenAIService openAI, IConfiguration configuration)
