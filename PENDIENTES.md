@@ -68,14 +68,14 @@ Unificado: `SendTest → Deadline = now + TestDeadlineDays`; `StartTest → Dead
 ### ✅ Google login ignora silenciosamente conflicto de rol
 No aplica — el login es una sola pantalla sin campo de rol. Solo el registro es independiente por tipo de usuario.
 
-### ⚪ LOGIC-01 — No se pueden actualizar skills/categorías de una oferta
-`UpdateOfferDto` no tiene `CategoryIds` ni `SkillIds`. La oferta queda con datos incorrectos sin posibilidad de corrección sin recrearla. Solución: agregar ambos campos a `UpdateOfferDto` y limpiar/reinsertar las relaciones en `UpdateOfferAsync`.
+### 🚫 LOGIC-01 — Actualizar skills/categorías de una oferta — descartado intencionalmente
+Decisión del negocio: una vez creado el test, la oferta no puede modificarse. Antes del test se puede editar todo.
 
-### ⚪ LOGIC-03 — Ofertas en `PendingPayment` no se pueden editar
-Si la empresa crea una oferta con errores no puede corregirlos antes de pagar. El guard `offer.Status != Open` bloquea todo. Solución: permitir edición también en `PendingPayment`.
+### ✅ LOGIC-03 — Ofertas en `PendingPayment` ahora se pueden editar
+`UpdateOfferAsync` permite editar en `PendingPayment` y `Open` siempre que no exista test generado. Una vez generado el test, la oferta queda bloqueada.
 
-### ⚪ LOGIC-04 — TestEditorService permite editar preguntas con test ya enviado
-No hay check de estado en `SendMessageAsync`. La empresa puede modificar preguntas mientras candidatos están rindiendo el test. Solución: bloquear edición si `offer.Status != Open`.
+### ✅ LOGIC-04 — TestEditorService bloquea edición cuando el test ya fue enviado
+`SendMessageAsync` ahora verifica `offer.Status == Open` antes de permitir modificar preguntas. Si la oferta está en `TestSent` o posterior, lanza 400.
 
 ### ⚪ LOGIC-05 — `GenerateTest` se puede llamar con oferta en `PendingPayment`
 Solo bloquea `forceRegenerate`. Consume tokens de OpenAI en ofertas sin pagar. Solución: agregar guard `offer.Status == Open || offer.Status == TestSent` al inicio de `GenerateTestAsync`.
@@ -86,8 +86,8 @@ Cascade destruye ofertas, matches, submissions y pagos sin warning. Solución: v
 ### ⚪ LOGIC-07 — `SendTestsAsync` puede ejecutarse con oferta en estado `Expired`
 No verifica `offer.ExpiresAt` ni bloquea el envío si la oferta no está en `Open` o `TestSent`.
 
-### ⚪ MISSING-02 — Candidato no puede ver sus matches ni su stage
-`GET /api/tests/candidate` cubre los tests pero no hay endpoint para ver en qué ofertas el candidato fue matcheado, su etapa (Matched, TestSent, TestCompleted, Selected, Rejected) ni si fue rechazado.
+### 🚫 MISSING-02 — Candidato no ve sus matches — descartado intencionalmente
+Decisión del negocio: el proceso es opaco para el candidato. Solo recibe correos (test enviado, seleccionado, rechazado). No hay vista de matches ni etapas.
 
 ---
 

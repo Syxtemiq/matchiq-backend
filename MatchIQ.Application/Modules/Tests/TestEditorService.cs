@@ -32,6 +32,15 @@ public class TestEditorService
         // Verificar que la empresa tenga acceso a esta pregunta
         await VerifyCompanyAccessAsync(userId, question);
 
+        // Bloquear edición si el test ya fue enviado a candidatos
+        var offerStatus = await _context.JobOffers
+            .Where(o => o.Test != null && o.Test.Id == question.TestId)
+            .Select(o => o.Status)
+            .FirstOrDefaultAsync();
+
+        if (offerStatus != OfferStatus.Open)
+            throw new InvalidOperationException("No se pueden modificar preguntas una vez que el test ha sido enviado a los candidatos.");
+
         var history = question.QuestionChatMessages
             .OrderBy(m => m.CreatedAt)
             .ToList();
