@@ -69,6 +69,14 @@ public class TestsController : ControllerBase
 
     // ── Candidato ─────────────────────────────────────────────────────────────────
 
+    [HttpGet("candidate")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> GetMyTests()
+    {
+        var tests = await _testService.GetMyTestsAsync(_currentUser.UserId);
+        return Ok(ApiResponse.Ok(tests));
+    }
+
     [HttpGet("{offerId:int}/candidate/preview")]
     [Authorize(Roles = "Candidate")]
     public async Task<IActionResult> GetTestPreview(int offerId)
