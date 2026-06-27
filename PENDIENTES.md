@@ -46,10 +46,8 @@ Un candidato puede ser expirado por el job antes de que venza su `TimeLimitMinut
 ### ✅ `DailyJobsService` no corre al arrancar el servidor
 `ExecuteAsync` ahora llama `RunJobsAsync` inmediatamente al arrancar, antes de entrar al loop del timer.
 
-### ⚪ Google login ignora silenciosamente conflicto de rol
-Si un usuario ya existe como Candidate y hace login con Google enviando `role: "Company"`, se loguea como Candidate sin ningún aviso.
-
-**Solución:** Si el rol enviado difiere del rol del usuario existente, retornar error claro o al menos incluir un campo `roleConflict` en la respuesta.
+### ✅ Google login ignora silenciosamente conflicto de rol
+No aplica — el login es una sola pantalla sin campo de rol. Solo el registro es independiente por tipo de usuario.
 
 ---
 

@@ -200,6 +200,32 @@ public class TestService
         return MapToSubmissionResult(submission, evaluation);
     }
 
+    public async Task<List<CandidateTestSummaryDto>> GetMyTestsAsync(int userId)
+    {
+        var candidateProfile = await _context.CandidateProfiles
+            .FirstOrDefaultAsync(p => p.UserId == userId)
+            ?? throw new KeyNotFoundException("Perfil de candidato no encontrado.");
+
+        var submissions = await _context.TestSubmissions
+            .Include(s => s.Test).ThenInclude(t => t.JobOffer)
+            .Where(s => s.CandidateId == candidateProfile.Id)
+            .OrderByDescending(s => s.Deadline)
+            .ToListAsync();
+
+        return submissions.Select(s => new CandidateTestSummaryDto
+        {
+            TestId = s.TestId,
+            OfferId = s.Test.OfferId,
+            OfferTitle = s.Test.JobOffer.Title,
+            TestTitle = s.Test.Title,
+            Status = s.Status.ToString(),
+            StartedAt = s.StartedAt,
+            Deadline = s.Deadline,
+            TimeLimitMinutes = s.Test.TimeLimitMinutes,
+            Score = s.Score
+        }).ToList();
+    }
+
     public async Task<SubmissionResultDto> GetSubmissionResultAsync(int testId, int userId)
     {
         var candidateProfile = await _context.CandidateProfiles

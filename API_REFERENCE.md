@@ -1104,7 +1104,60 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
 
 ---
 
-### 37. Ver resumen del test sin iniciarlo (candidato)
+### 37. Listar mis tests (candidato)
+`GET /api/tests/candidate` · 👤 Candidate
+
+Devuelve todos los tests a los que el candidato ha sido invitado, ordenados por deadline descendente.
+
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "testId": 3,
+      "offerId": 7,
+      "offerTitle": "Desarrollador React Senior",
+      "testTitle": "Test técnico — React Senior",
+      "status": "Pending",
+      "startedAt": null,
+      "deadline": "2026-06-29T15:00:00Z",
+      "timeLimitMinutes": 45,
+      "score": null
+    },
+    {
+      "testId": 5,
+      "offerId": 9,
+      "offerTitle": "Backend Node.js",
+      "testTitle": "Test técnico — Node.js",
+      "status": "Evaluated",
+      "startedAt": "2026-06-25T10:00:00Z",
+      "deadline": "2026-06-27T10:00:00Z",
+      "timeLimitMinutes": 30,
+      "score": 82.50
+    }
+  ],
+  "message": null
+}
+```
+
+> **Lógica de estado en el frontend:**
+> - `status = "Pending"` + `startedAt = null` → **Sin realizar** (mostrar botón "Ir al test")
+> - `status = "Pending"` + `startedAt != null` → **En curso** (mostrar botón "Continuar")
+> - `status = "Evaluated"` → **Completado** (mostrar score y botón "Ver resultado")
+> - `status = "Expired"` → **Expirado** (mostrar mensaje, sin acción)
+>
+> Usar `offerId` para navegar a `preview` → `start`. Usar `testId` para navegar a `result`.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 404 | `"Perfil de candidato no encontrado."` |
+
+---
+
+### 38. Ver resumen del test sin iniciarlo (candidato)
 `GET /api/tests/{offerId}/candidate/preview` · 👤 Candidate
 
 Devuelve solo los metadatos del test — título, tiempo límite y conteo de preguntas por tipo. **No toca `startedAt` ni inicia el cronómetro.** Usar para mostrarle al candidato qué le espera antes de que confirme que quiere empezar.
@@ -1419,12 +1472,14 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 4. candidate/profile (PUT) — completar perfil (dispara matching automático)
    [El sistema evalúa al candidato contra todas las ofertas abiertas]
    [Candidato recibe email de invitación cuando la empresa le envía el test]
-5. tests/{offerId}/candidate/preview (GET) — ver resumen del test (sin iniciar cronómetro)
+5. tests/candidate (GET) — sección "Mis tests": lista todos sus tests con estado
+   [Sin realizar / En curso / Completado / Expirado]
+6. tests/{offerId}/candidate/preview (GET) — ver resumen del test (sin iniciar cronómetro)
    [Mostrar: título, tiempo límite, número y tipos de preguntas]
    [El candidato confirma "Quiero empezar"]
-6. tests/{offerId}/candidate/start (POST) — iniciar test formalmente (inicia cronómetro)
-7. tests/{testId}/submit (POST) — enviar respuestas
-8. tests/{testId}/result (GET) — ver calificación y feedback
+7. tests/{offerId}/candidate/start (POST) — iniciar test formalmente (inicia cronómetro)
+8. tests/{testId}/submit (POST) — enviar respuestas
+9. tests/{testId}/result (GET) — ver calificación y feedback
 ```
 
 ---
