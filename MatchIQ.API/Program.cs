@@ -37,7 +37,8 @@ var dataSourceBuilder = new NpgsqlDataSourceBuilder(
 var npgsqlDataSource = dataSourceBuilder.Build();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(npgsqlDataSource));
+    options.UseNpgsql(npgsqlDataSource)
+           .UseSnakeCaseNamingConvention());
 
 // ── Autenticación JWT ─────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
