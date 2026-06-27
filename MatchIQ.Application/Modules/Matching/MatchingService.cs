@@ -65,7 +65,7 @@ public class MatchingService
             try
             {
                 var insight = await _aiService.EvaluateCandidateAsync(offer, match);
-                var raw = 0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100;
+                var raw = 0.9m * (match.MatchPercentage ?? 0) + insight.FitScore;
 
                 var dbMatch = await _context.Matches.FindAsync(match.Id);
                 if (dbMatch is null) continue;
@@ -213,6 +213,7 @@ public class MatchingService
         var allMatches = await _context.Matches
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateSkills).ThenInclude(cs => cs.Skill)
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateCategories).ThenInclude(cc => cc.Category)
             .Where(m => m.OfferId == offerId)
             .ToListAsync();
 
@@ -226,7 +227,7 @@ public class MatchingService
                 if (insight is not null)
                 {
                     match.AdjustedScore = Math.Min(100,
-                        0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                        0.9m * (match.MatchPercentage ?? 0) + insight.FitScore);
                     match.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -246,7 +247,7 @@ public class MatchingService
             {
                 var insight = await _aiService.EvaluateCandidateAsync(offer, match);
                 match.AdjustedScore = Math.Min(100,
-                    0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                    0.9m * (match.MatchPercentage ?? 0) + insight.FitScore);
                 match.AiFeedback = JsonSerializer.Serialize(insight);
                 match.UpdatedAt = DateTime.UtcNow;
             }

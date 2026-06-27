@@ -64,6 +64,9 @@ public class MatchRepository : IMatchRepository
             .Include(m => m.CandidateProfile)
                 .ThenInclude(cp => cp.CandidateSkills)
                     .ThenInclude(cs => cs.Skill)
+            .Include(m => m.CandidateProfile)
+                .ThenInclude(cp => cp.CandidateCategories)
+                    .ThenInclude(cc => cc.Category)
             .Where(m => m.OfferId == offerId)
             .OrderByDescending(m => m.AdjustedScore ?? m.MatchPercentage)
             .ToListAsync();

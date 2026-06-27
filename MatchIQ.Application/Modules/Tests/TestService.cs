@@ -157,6 +157,9 @@ public class TestService
                 ? "El plazo para rendir este test ha expirado."
                 : "Ya enviaste tus respuestas.");
 
+        if (submission.SubmittedAt is not null)
+            throw new InvalidOperationException("Tus respuestas ya fueron recibidas. El resultado estará disponible pronto.");
+
         var test = await _context.Tests
             .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
             .FirstOrDefaultAsync(t => t.Id == testId)
@@ -165,8 +168,27 @@ public class TestService
         submission.AnswersJson = JsonSerializer.Serialize(dto.Answers);
         submission.SubmittedAt = DateTime.UtcNow;
 
-        // Evaluación con IA
-        var evaluation = await _aiService.EvaluateSubmissionAsync(test, submission);
+        // Persistir respuestas antes de llamar a la IA — si la IA falla, las respuestas no se pierden
+        await _context.SaveChangesAsync();
+
+        // Evaluación con IA — hasta 3 intentos con backoff
+        SubmissionEvaluationDto? evaluation = null;
+        for (var attempt = 1; attempt <= 3 && evaluation is null; attempt++)
+        {
+            try
+            {
+                evaluation = await _aiService.EvaluateSubmissionAsync(test, submission);
+            }
+            catch
+            {
+                if (attempt < 3)
+                    await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
+            }
+        }
+
+        // Si todos los reintentos fallaron, las respuestas están guardadas y el DailyJob reintentará
+        if (evaluation is null)
+            return MapToSubmissionResult(submission, null);
 
         submission.Score = evaluation.Score;
         submission.Feedback = JsonSerializer.Serialize(evaluation);
@@ -225,7 +247,12 @@ public class TestService
             ?? throw new KeyNotFoundException("No tienes una submission para este test.");
 
         if (submission.Status == SubmissionStatus.Pending)
-            throw new InvalidOperationException("Aún no has enviado tus respuestas.");
+        {
+            var msg = submission.SubmittedAt is not null
+                ? "Tus respuestas fueron recibidas. El resultado estará disponible pronto."
+                : "Aún no has enviado tus respuestas.";
+            throw new InvalidOperationException(msg);
+        }
 
         SubmissionEvaluationDto? evaluation = null;
         if (submission.Feedback is not null)
@@ -312,6 +339,49 @@ public class TestService
             IsGorilla = includeAnswers ? q.IsGorilla : null,
             GorillaHint = includeAnswers ? q.GorillaHint : null
         };
+    }
+
+    // Llamado por el DailyJob para reeintentar evaluaciones cuya llamada IA falló anteriormente.
+    // Solo procesa submissions con SubmittedAt != null y Status == Pending.
+    public async Task RetryPendingEvaluationsAsync()
+    {
+        var pending = await _context.TestSubmissions
+            .Where(s => s.Status == SubmissionStatus.Pending && s.SubmittedAt != null)
+            .ToListAsync();
+
+        foreach (var submission in pending)
+        {
+            try
+            {
+                var test = await _context.Tests
+                    .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
+                    .FirstOrDefaultAsync(t => t.Id == submission.TestId);
+
+                if (test is null) continue;
+
+                var evaluation = await _aiService.EvaluateSubmissionAsync(test, submission);
+
+                submission.Score = evaluation.Score;
+                submission.Feedback = JsonSerializer.Serialize(evaluation);
+                submission.Status = SubmissionStatus.Evaluated;
+                submission.AiEvaluatedAt = DateTime.UtcNow;
+
+                var match = await _context.Matches
+                    .FirstOrDefaultAsync(m => m.OfferId == test.OfferId && m.CandidateId == submission.CandidateId);
+
+                if (match is not null)
+                {
+                    match.Stage = MatchStage.TestCompleted;
+                    match.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                // best-effort: si uno falla, continúa con los demás
+            }
+        }
     }
 
     private static SubmissionResultDto MapToSubmissionResult(
