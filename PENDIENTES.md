@@ -68,14 +68,17 @@ Unificado: `SendTest → Deadline = now + TestDeadlineDays`; `StartTest → Dead
 ### ✅ Google login ignora silenciosamente conflicto de rol
 No aplica — el login es una sola pantalla sin campo de rol. Solo el registro es independiente por tipo de usuario.
 
-### 🚫 LOGIC-01 — Actualizar skills/categorías de una oferta — descartado intencionalmente
-Decisión del negocio: una vez creado el test, la oferta no puede modificarse. Antes del test se puede editar todo.
+### 🚫 LOGIC-01 — Actualizar skills/categorías post-pago — descartado intencionalmente
+Decisión del negocio: el pago es el punto de no retorno. En `PendingPayment` se puede editar todo libremente. Una vez pagada (`Open`), la oferta queda inmutable.
 
-### ✅ LOGIC-03 — Ofertas en `PendingPayment` ahora se pueden editar
-`UpdateOfferAsync` permite editar en `PendingPayment` y `Open` siempre que no exista test generado. Una vez generado el test, la oferta queda bloqueada.
+### ✅ LOGIC-03 — Punto de no retorno en el pago
+`UpdateOfferAsync`, `TestEditorService.SendMessageAsync` y `forceRegenerate` solo están permitidos en `PendingPayment`. Una vez que la oferta pasa a `Open` (pagada), nada puede modificarse.
 
-### ✅ LOGIC-04 — TestEditorService bloquea edición cuando el test ya fue enviado
-`SendMessageAsync` ahora verifica `offer.Status == Open` antes de permitir modificar preguntas. Si la oferta está en `TestSent` o posterior, lanza 400.
+### ✅ LOGIC-04 — TestEditorService bloquea edición tras el pago
+`SendMessageAsync` ahora verifica `offer.Status == PendingPayment`. Si la oferta ya fue pagada (`Open` en adelante), lanza 400.
+
+### ✅ LOGIC-05 — GenerateTest/Regenerate bloqueado tras el pago
+`forceRegenerate = true` solo está permitido en `PendingPayment`. En `Open` o posterior, la empresa no puede regenerar el test.
 
 ### ⚪ LOGIC-05 — `GenerateTest` se puede llamar con oferta en `PendingPayment`
 Solo bloquea `forceRegenerate`. Consume tokens de OpenAI en ofertas sin pagar. Solución: agregar guard `offer.Status == Open || offer.Status == TestSent` al inicio de `GenerateTestAsync`.
