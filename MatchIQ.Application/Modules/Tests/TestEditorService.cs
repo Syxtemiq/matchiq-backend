@@ -38,8 +38,8 @@ public class TestEditorService
             .Select(o => o.Status)
             .FirstOrDefaultAsync();
 
-        if (offerStatus != OfferStatus.Open)
-            throw new InvalidOperationException("No se pueden modificar preguntas una vez que el test ha sido enviado a los candidatos.");
+        if (offerStatus != OfferStatus.PendingPayment)
+            throw new InvalidOperationException("No se pueden modificar preguntas una vez que la oferta ha sido activada.");
 
         var history = question.QuestionChatMessages
             .OrderBy(m => m.CreatedAt)
