@@ -17,4 +17,6 @@ public class MatchResultDto
     public string? AiRecommendation { get; set; }
     public List<string> MatchedSkills { get; set; } = [];
     public DateTime CreatedAt { get; set; }
+    public decimal? TestScore { get; set; }
+    public string? TestFeedback { get; set; }
 }
