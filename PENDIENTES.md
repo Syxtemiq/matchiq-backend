@@ -90,6 +90,9 @@ Por cada candidato de `get_candidate_matches`, se hace una query separada para v
 
 ## ✅ RESUELTOS
 
+### ✅ `SubmissionEvaluationPrompt` deserializaba `AnswersJson` como `Dictionary<string, string>` (crash 500)
+`AnswersJson` se guarda como `List<AnswerItemDto>` (array JSON), pero el prompt lo intentaba leer como diccionario → `JsonException` en cada submit → ningún candidato podía enviar sus respuestas. Corregido: ahora se deserializa como `List<AnswerRaw>` y se convierte a diccionario `questionId → respuesta`.
+
 ### ✅ Empresa no podía ver el score del test de los candidatos
 `LoadMatchDtosAsync` ahora carga las submissions evaluadas en batch (1 query) y las pasa a `MapToDto`. `MatchResultDto` expone `TestScore` (decimal?) y `TestFeedback` (string?) para todos los matches con `stage = TestCompleted | Selected`. `SelectCandidateAsync` también pasa la submission al retornar el match actualizado.
 

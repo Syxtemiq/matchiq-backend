@@ -9,11 +9,16 @@ public static class SubmissionEvaluationPrompt
     public static string Build(Test test, TestSubmission submission)
     {
         var questions = test.TestQuestions.OrderBy(q => q.OrderIndex).ToList();
-        var answers = submission.AnswersJson is not null
-            ? JsonSerializer.Deserialize<Dictionary<string, string>>(submission.AnswersJson,
+
+        var answerList = submission.AnswersJson is not null
+            ? JsonSerializer.Deserialize<List<AnswerRaw>>(submission.AnswersJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-              ?? new Dictionary<string, string>()
-            : new Dictionary<string, string>();
+            : null;
+
+        var answers = answerList?.ToDictionary(
+            a => a.QuestionId.ToString(),
+            a => a.SelectedOption ?? a.CodeSubmitted ?? "(sin respuesta)")
+            ?? new Dictionary<string, string>();
 
         var questionsBlock = string.Join("\n\n", questions.Select(q =>
         {
@@ -81,5 +86,12 @@ public static class SubmissionEvaluationPrompt
               ]
             }
             """;
+    }
+
+    private sealed class AnswerRaw
+    {
+        public int QuestionId { get; set; }
+        public string? SelectedOption { get; set; }
+        public string? CodeSubmitted { get; set; }
     }
 }
