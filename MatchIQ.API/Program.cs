@@ -127,7 +127,7 @@ builder.Services.AddScoped<IAIService, OpenAIService>();
 builder.Services.AddScoped<IOfferParserService, OfferParserService>();
 builder.Services.AddScoped<IEmailService, MailKitEmailService>();
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
-builder.Services.AddHttpClient<IPaymentService, WompiService>();
+builder.Services.AddScoped<IPaymentService, StripeService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<ITestRepository, TestRepository>();
