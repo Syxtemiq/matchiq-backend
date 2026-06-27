@@ -287,8 +287,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
-                .HasMaxLength(50)
-                .HasDefaultValue(OfferStatus.PendingPayment);
+                .HasMaxLength(50);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
             e.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamp");
@@ -331,8 +330,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
-                .HasMaxLength(50)
-                .HasDefaultValue(PaymentStatus.Pending);
+                .HasMaxLength(50);
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -409,8 +407,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Stage)
                 .HasColumnName("stage")
                 .HasConversion<string>()
-                .HasMaxLength(50)
-                .HasDefaultValue(MatchStage.Matched);
+                .HasMaxLength(50);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -523,8 +520,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Status)
                 .HasColumnName("status")
                 .HasConversion<string>()
-                .HasMaxLength(50)
-                .HasDefaultValue(SubmissionStatus.Pending);
+                .HasMaxLength(50);
             e.Property(x => x.StartedAt).HasColumnName("started_at").HasColumnType("timestamp");
             e.Property(x => x.SubmittedAt).HasColumnName("submitted_at").HasColumnType("timestamp");
             e.Property(x => x.AiEvaluatedAt).HasColumnName("ai_evaluated_at").HasColumnType("timestamp");
