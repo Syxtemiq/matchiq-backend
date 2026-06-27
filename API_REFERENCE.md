@@ -825,20 +825,23 @@ Base path: `/api/matching`
       "englishLevel": "B2",
       "matchPercentage": 87.50,
       "adjustedScore": 91.20,
-      "stage": "Matched",
+      "stage": "TestCompleted",
       "aiInsight": "Candidato con sólido dominio de React y experiencia alineada.",
       "aiStrengths": ["React avanzado", "Experiencia en proyectos escalables"],
       "aiOpportunities": ["Puede reforzar TypeScript"],
       "aiRecommendation": "Recomendado para el test técnico.",
       "matchedSkills": ["React", "JavaScript"],
-      "createdAt": "2026-06-25T15:00:00Z"
+      "createdAt": "2026-06-25T15:00:00Z",
+      "testScore": 82.50,
+      "testFeedback": "Buen desempeño general. El código del challenge es funcional aunque podría optimizarse."
     }
   ],
   "message": null
 }
 ```
 > Lista ordenada por `adjustedScore` desc (o `matchPercentage` si no hay score de IA).
-> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` — solo el top 3 recibe evaluación automática.
+> `aiInsight`, `aiStrengths`, `aiOpportunities`, `aiRecommendation` pueden ser `null` — solo el top 3 recibe evaluación automática de fit antes del test.
+> `testScore` y `testFeedback` son `null` hasta que el candidato complete y envíe el test (`stage = "TestCompleted"` o `"Selected"`). Son el score 0–100 y el feedback resumen que generó la IA al evaluar las respuestas.
 > El email real del candidato solo está visible cuando `stage = "Selected"`.
 
 **Errores posibles:**
@@ -1206,7 +1209,7 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 39. Ver resultado de un test
+### 40. Ver resultado de un test
 `GET /api/tests/{testId}/result` · 👤 Candidate
 
 Devuelve el resultado si ya fue evaluado.
@@ -1406,8 +1409,8 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 11. tests/questions/{id}/chat (POST) — ajustar preguntas con IA (opcional)
 12. matching/{offerId} (GET) — ver ranking de candidatos
 13. matching/send-test (POST) — enviar test a candidatos seleccionados
-14. matching/{offerId} (GET) — ver resultados cuando completen el test
-15. matching/{matchId}/select o /reject — decisión final
+14. matching/{offerId} (GET) — ver ranking con `testScore` y `testFeedback` de quienes completaron el test
+15. matching/{matchId}/select o /reject — decisión final basada en score del test
 ```
 
 ### Flujo Candidato (Candidate)
@@ -1433,5 +1436,6 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 3. **Flujo de test en dos pasos:** llamar `preview` para mostrar qué le espera al candidato. Solo llamar `start` cuando el candidato confirme explícitamente — ese POST registra `startedAt` y no hay vuelta atrás.
 4. **Estado de la oferta:** cuando `status = "PendingPayment"`, mostrar el botón de pago. `checkoutUrl` puede ser `null` si aún no se generó el link — llamar `create-checkout` para obtenerlo.
 5. **Email del candidato en matching:** el email real solo aparece cuando `stage = "Selected"`. En etapas anteriores puede venir enmascarado.
-6. **Rate limits:** al recibir `429`, esperar al menos 60 segundos antes de reintentar. No mostrar un spinner — informar al usuario.
-7. **Catálogo:** cargar categorías y skills una sola vez al iniciar la app y cachear — no cambian con frecuencia.
+6. **Score del test en matching:** `testScore` y `testFeedback` son `null` mientras el candidato no haya enviado sus respuestas. Aparecen automáticamente en `GET /api/matching/{offerId}` en cuanto el candidato completa el test — no hay que hacer ninguna llamada extra. Usarlos para la pantalla de decisión (select/reject).
+7. **Rate limits:** al recibir `429`, esperar al menos 60 segundos antes de reintentar. No mostrar un spinner — informar al usuario.
+8. **Catálogo:** cargar categorías y skills una sola vez al iniciar la app y cachear — no cambian con frecuencia.

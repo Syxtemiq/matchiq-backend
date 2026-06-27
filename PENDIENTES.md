@@ -4,85 +4,119 @@
 
 ---
 
-## Por commitear (código listo, sin commit)
+## 🔴 CRÍTICOS (rompen funcionalidad)
 
-- `POST /api/auth/resend-verification` — reenvío de código de verificación de email.
-  Archivos: `ResendVerificationDto.cs`, `AuthService.cs`, `AuthController.cs`
+### ⚪ Incompatibilidad de strings SQL vs EF Core
+EF Core `HasConversion<string>()` guarda enums en PascalCase (`'Open'`, `'Pending'`, `'Matched'`), pero las funciones PostgreSQL comparan contra minúsculas (`'open'`, `'pending'`, `'matched'`). Consecuencias:
+- `trigger_rematch_open_offers` → nunca dispara → matching automático muerto
+- `expire_stale_offers()` → nunca encuentra registros → ofertas no expiran
+- `expire_stale_submissions()` → submissions no expiran
+- `get_full_offer_ranking` inserta `stage = 'matched'` (minúscula) → inconsistencia
 
----
+**Solución:** Ejecutar `CREATE OR REPLACE FUNCTION` con valores PascalCase en la BD (ya están en `DBContext.md`). No requiere cambios en C#.
 
-## Gaps de seguridad 
+### ⚪ `Enum.Parse` sin guard lanza 500 en `CandidateService`
+`CandidateService.cs:84-87` usa `Enum.Parse` (no `TryParse`). Lanza `ArgumentException`, que el middleware no captura → 500 en vez de 400.
 
-### 🟠 Google OAuth no valida audience
-`GoogleTokenValidator` verifica que el token sea válido con Google, pero no verifica que el `aud` del token coincida con el `Google:ClientId` configurado en `appsettings.json`. Un token generado por cualquier otra app de Google pasaría la validación.
+**Solución:** Reemplazar con `Enum.TryParse` igual que en `AuthService` y `OffersService`.
 
-**Solución:** en `GoogleTokenValidator`, al llamar `GoogleJsonWebSignature.ValidateAsync`, pasar `new ValidationSettings { Audience = new[] { clientId } }`.
+### ⚪ Regeneración de test sin verificar estado de la oferta
+`TestService.GenerateTestAsync` con `forceRegenerate: true` no chequea si la oferta está en `TestSent`. Si la empresa regenera el test, se eliminan las preguntas que candidatos tienen activas.
 
-### 🟠 `RunMatchingAsync` no verifica ownership
-`POST /api/matching/{offerId}/run` no valida que la oferta pertenezca a la empresa autenticada. Cualquier empresa con JWT válido puede triggear el matching de una oferta ajena.
-
-**Solución:** en `MatchingService.RunMatchingAsync`, agregar verificación de `offer.CompanyId == company.Id` igual que hacen `ReevaluateAsync` y los demás métodos del mismo servicio.
-
----
-
-## Gaps de UX / flujo
-
-### ✅ Ver resumen del test sin iniciarlo (candidato) — RESUELTO
-- `GET /api/tests/{offerId}/candidate/preview` → devuelve `TestPreviewDto` (título, tiempo límite, conteo por tipo). No toca `StartedAt`.
-- `POST /api/tests/{offerId}/candidate/start` → registra `StartedAt` y devuelve las preguntas sin respuestas correctas.
-- El endpoint anterior `GET /api/tests/{offerId}/candidate` fue eliminado.
-
-### ✅ Email al candidato cuando es seleccionado o rechazado — RESUELTO
-- `SelectCandidateAsync` → `SendCandidateSelectedAsync` (email de felicitación, best-effort)
-- `RejectCandidateAsync` → `SendCandidateRejectedAsync` (email empático con invitación a actualizar perfil, best-effort)
-- Ambos métodos agregados a `IEmailService` e implementados en `MailKitEmailService`.
+**Solución:** Bloquear `forceRegenerate` si `offer.Status != OfferStatus.Open`.
 
 ---
 
-## Gaps de lógica de negocio
+## 🟠 SEGURIDAD
 
-### ✅ Lógica de cierre de oferta unificada — RESUELTO
-**Decisión:** la oferta cierra SOLO cuando la empresa selecciona suficientes candidatos para
-llenar todas las posiciones (`SelectCandidateAsync`). Las submissions expiradas/evaluadas
-no cierran la oferta.
+### ⚪ Email del candidato expuesto sin importar el stage en `MatchResultDto`
+`MatchingService.cs:402` siempre incluye `Email = match.CandidateProfile.User.Email`. La privacidad (ocultar email hasta `Selected`) solo existe en la función SQL pero el C# la ignora.
 
-**Cambios aplicados:**
-- `check_offer_completion()` SQL eliminada — ya no se llama desde ningún lado.
-- `trg_fn_submission_evaluated` trigger SQL eliminado — ya no cierra la oferta al evaluar.
-- `expire_stale_submissions()` simplificada — solo expira submissions, sin tocar el estado de la oferta.
-- `SelectCandidateAsync` en C# permanece como el único mecanismo de cierre.
+**Solución:** En `MapToDto`, devolver `Email = match.Stage == MatchStage.Selected ? match.CandidateProfile.User.Email : null`.
 
-**Script a correr en BD existente (una sola vez):**
-```sql
-DROP TRIGGER IF EXISTS trg_submission_evaluated ON test_submissions;
-DROP FUNCTION IF EXISTS trg_fn_submission_evaluated();
-DROP FUNCTION IF EXISTS check_offer_completion(INTEGER);
-```
+### ⚪ Race condition en `SelectCandidateAsync`
+Cuenta candidatos seleccionados antes de guardar → dos requests simultáneos pueden ambos pasar el check y exceder `PositionsAvailable`.
 
-### ⚪ `ai_feedback` queda obsoleto al editar la oferta
-Si la empresa edita los skills requeridos después de que la IA evaluó candidatos, el análisis cualitativo guardado en `ai_feedback` queda desactualizado aunque el score numérico se recalcule con `ReevaluateAsync`.
+**Solución:** Usar una query atómica con `ExecuteSqlRaw` o mover el cierre de oferta a un UPDATE condicional en SQL.
 
-**Solución posible:** al editar una oferta (`UpdateOfferAsync`), si cambian `skillIds` o `categoryIds`, borrar el campo `ai_feedback` de todos los matches existentes para forzar reevaluación limpia.
+### ⚪ Código de verificación de email no es criptográficamente seguro
+`AuthService.cs:313` usa `Random.Shared.Next()` que es predecible.
+
+**Solución:** Reemplazar con `RandomNumberGenerator.GetInt32(100_000, 1_000_000)`.
 
 ---
 
-## Calidad de código
+## 🟡 LÓGICA DE NEGOCIO
 
-### 🔴 Sin validaciones en los DTOs
-Ningún DTO tiene validaciones. Requests malformados generan 500 en lugar de 400 con mensaje claro. Ejemplos:
-- Email con formato inválido en registro
-- `selectedOption: "Z"` en submit de test (solo acepta A/B/C/D)
-- `level: 999` en skills del candidato (rango válido: 1–5)
-- `tierId` inexistente al crear oferta
+### ⚪ Dos sistemas de timeout en paralelo e inconsistentes
+- `SendTestsAsync` pone `Deadline = +72 horas`
+- `SubmitAnswersAsync` valida `TimeLimitMinutes` desde `StartedAt`
+- `DailyJobsService` expira por el `Deadline` (72h)
 
-**Solución:** instalar `FluentValidation.AspNetCore` y crear validators por DTO, o usar `[Required]`, `[EmailAddress]`, `[Range]` de DataAnnotations como mínimo. Registrar en `Program.cs` con `AddFluentValidation()` o activar `ModelState` automático.
+Un candidato puede ser expirado por el job antes de que venza su `TimeLimitMinutes` si empezó cerca de las 72h.
+
+**Solución:** Definir un solo mecanismo. El recomendado: el `Deadline` se calcula como `StartedAt + TimeLimitMinutes` cuando el candidato hace `StartTest`, no al enviar. El check en `SubmitAnswers` se elimina y se confía en el `Deadline`.
+
+### ⚪ `DailyJobsService` no corre al arrancar el servidor
+El `PeriodicTimer` espera 24h antes del primer tick. Submissions/ofertas expiradas durante downtime no se procesan hasta el día siguiente.
+
+**Solución:** Llamar `RunJobsAsync` al inicio de `ExecuteAsync` antes de entrar al loop del timer.
+
+### ⚪ Google login ignora silenciosamente conflicto de rol
+Si un usuario ya existe como Candidate y hace login con Google enviando `role: "Company"`, se loguea como Candidate sin ningún aviso.
+
+**Solución:** Si el rol enviado difiere del rol del usuario existente, retornar error claro o al menos incluir un campo `roleConflict` en la respuesta.
 
 ---
 
-## Documentación
+## 🔵 CALIDAD / ESCALABILIDAD
 
-- Actualizar `API_REFERENCE.md` con los endpoints nuevos:
-  - `POST /api/auth/resend-verification`
-  - `POST /api/admin/users` (crear admin)
-  - `GET /api/tests/{offerId}/candidate/preview` ✅ documentado
-  - `POST /api/tests/{offerId}/candidate/start` ✅ documentado
+### ⚪ Sin paginación en endpoints de lista
+`GetMyOffersAsync`, `GetMatchesByOfferAsync`, `GetAllUsersAsync` retornan listas completas. Con volumen real es un problema de memoria y latencia.
+
+**Solución:** Agregar parámetros `page` y `pageSize` con un máximo configurable.
+
+### ⚪ N+1 queries en `MatchRepository.RunMatchingAsync`
+Por cada candidato de `get_candidate_matches`, se hace una query separada para verificar si ya existe el match. Con 200 candidatos = 200 queries extra.
+
+**Solución:** Cargar todos los matches existentes de la oferta en una sola query antes del loop, y comparar en memoria con un `HashSet<int>`.
+
+### ⚪ Chat del editor de preguntas guarda respuesta genérica
+`TestEditorService.cs:71` siempre guarda `"He actualizado la pregunta según tu solicitud."` en el historial. El admin no puede ver qué hizo la IA.
+
+**Solución:** Incluir en el mensaje del asistente un resumen de qué cambió (o retornar el diff de la pregunta), o al menos exponer el `QuestionText` actualizado en la respuesta del chat.
+
+---
+
+## ✅ RESUELTOS
+
+### ✅ Empresa no podía ver el score del test de los candidatos
+`LoadMatchDtosAsync` ahora carga las submissions evaluadas en batch (1 query) y las pasa a `MapToDto`. `MatchResultDto` expone `TestScore` (decimal?) y `TestFeedback` (string?) para todos los matches con `stage = TestCompleted | Selected`. `SelectCandidateAsync` también pasa la submission al retornar el match actualizado.
+
+### ✅ Google OAuth no valida audience
+`GoogleTokenValidator` ya pasa `Audience = [_clientId]`.
+
+### ✅ `RunMatchingAsync` no verifica ownership
+`MatchingService.RunMatchingAsync` ya verifica `offer.CompanyId != company.Id`.
+
+### ✅ Ver resumen del test sin iniciarlo (candidato)
+`GET /api/tests/{offerId}/candidate/preview` → devuelve `TestPreviewDto`.
+`POST /api/tests/{offerId}/candidate/start` → registra `StartedAt`.
+
+### ✅ Email al candidato cuando es seleccionado o rechazado
+`SelectCandidateAsync` y `RejectCandidateAsync` con emails best-effort.
+
+### ✅ Lógica de cierre de oferta unificada
+La oferta cierra SOLO cuando la empresa selecciona suficientes candidatos en `SelectCandidateAsync`.
+
+### ✅ Enums PostgreSQL eliminados
+Todas las columnas enum convertidas a `VARCHAR`. `HasConversion<string>()` en `AppDbContext`. `UseSnakeCaseNamingConvention()` resuelve el mapeo de `Id` → `id`.
+
+### ✅ Registro de admin bloqueado públicamente
+`RegisterAsync` bloquea rol `Admin`. Solo `POST /api/admin/users` (requiere token Admin) puede crear admins.
+
+### ✅ `POST /api/auth/resend-verification`
+Endpoint implementado, con rate limiting `auth-strict` y anti-enumeración.
+
+### ✅ API_REFERENCE.md actualizado
+Todos los endpoints documentados.

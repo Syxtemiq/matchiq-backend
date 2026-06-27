@@ -344,7 +344,17 @@ public class MatchingService
         catch { /* best-effort: la selección ya se guardó */ }
 
         var offerSkillIds = match.JobOffer.OfferSkills.Select(os => os.SkillId).ToHashSet();
-        return MapToDto(match, offerSkillIds);
+
+        var testId = await _context.Tests
+            .Where(t => t.OfferId == match.OfferId)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+
+        TestSubmission? submission = testId == 0 ? null
+            : await _context.TestSubmissions
+                .FirstOrDefaultAsync(s => s.TestId == testId && s.CandidateId == match.CandidateId);
+
+        return MapToDto(match, offerSkillIds, submission);
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────────
@@ -377,15 +387,41 @@ public class MatchingService
             .OrderByDescending(m => m.AdjustedScore ?? m.MatchPercentage)
             .ToListAsync();
 
-        return matches.Select(m => MapToDto(m, offerSkillIds)).ToList();
+        var testId = await _context.Tests
+            .Where(t => t.OfferId == offerId)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+
+        var submissionsByCandidateId = testId == 0
+            ? []
+            : await _context.TestSubmissions
+                .Where(s => s.TestId == testId && s.Status == SubmissionStatus.Evaluated)
+                .ToDictionaryAsync(s => s.CandidateId);
+
+        return matches.Select(m =>
+        {
+            submissionsByCandidateId.TryGetValue(m.CandidateId, out var submission);
+            return MapToDto(m, offerSkillIds, submission);
+        }).ToList();
     }
 
-    private static MatchResultDto MapToDto(Match match, HashSet<int> offerSkillIds)
+    private static MatchResultDto MapToDto(Match match, HashSet<int> offerSkillIds, TestSubmission? submission = null)
     {
         CandidateInsightDto? insight = null;
         if (match.AiFeedback is not null)
         {
             try { insight = JsonSerializer.Deserialize<CandidateInsightDto>(match.AiFeedback); }
+            catch { /* ignore parse errors */ }
+        }
+
+        string? testFeedback = null;
+        if (submission?.Feedback is not null)
+        {
+            try
+            {
+                var eval = JsonSerializer.Deserialize<SubmissionEvaluationDto>(submission.Feedback);
+                testFeedback = eval?.Feedback;
+            }
             catch { /* ignore parse errors */ }
         }
 
@@ -410,7 +446,9 @@ public class MatchingService
             AiOpportunities = insight?.Opportunities ?? [],
             AiRecommendation = insight?.Recommendation,
             MatchedSkills = matchedSkills,
-            CreatedAt = match.CreatedAt
+            CreatedAt = match.CreatedAt,
+            TestScore = submission?.Score,
+            TestFeedback = testFeedback
         };
     }
 }
