@@ -17,6 +17,8 @@ public class DailyJobsService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await RunJobsAsync(stoppingToken);
+
         using var timer = new PeriodicTimer(_interval);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))

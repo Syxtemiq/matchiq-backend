@@ -34,6 +34,9 @@ public class TestService
         if (existing is not null && !forceRegenerate)
             return MapToDto(existing, includeAnswers: true);
 
+        if (forceRegenerate && offer.Status != OfferStatus.Open)
+            throw new InvalidOperationException("No se puede regenerar el test: la oferta ya tiene candidatos en proceso de evaluación.");
+
         // Si se fuerza regeneración, eliminar el test anterior (cascade borra preguntas y chat)
         if (existing is not null)
         {

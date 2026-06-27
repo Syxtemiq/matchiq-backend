@@ -310,5 +310,5 @@ public class AuthService
     }
 
     private static string GenerateSixDigitCode() =>
-        Random.Shared.Next(100_000, 999_999).ToString();
+        System.Security.Cryptography.RandomNumberGenerator.GetInt32(100_000, 1_000_000).ToString();
 }
