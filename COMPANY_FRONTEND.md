@@ -309,3 +309,76 @@ Con estos datos el frontend puede construir una vista que incluya:
 - Lista de preguntas donde para cada una se muestre el enunciado, lo que respondió el candidato, si estuvo correcto o no, y el feedback de la IA
 - Para MultipleChoice: mostrar las opciones con la elegida resaltada en verde o rojo según `isCorrect`, e indicar cuál era la correcta si falló
 - Para CodeChallenge: mostrar el código enviado en un bloque de código, junto con el feedback de la IA debajo
+
+---
+
+---
+
+# Reporte de proctoring (comportamiento durante el test)
+
+## Endpoint
+
+```
+GET /api/tests/submissions/{matchId}/proctoring
+Authorization: Bearer <token>   (rol: Company)
+```
+
+El parámetro es el mismo `matchId` que en `GET /api/tests/submissions/{matchId}`. Solo disponible después de que el candidato completó el test.
+
+---
+
+## Respuesta exitosa
+
+```json
+{
+  "success": true,
+  "data": {
+    "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+    "inicio": "2026-06-28T15:00:00Z",
+    "fin": "2026-06-28T16:00:00Z",
+    "totalFramesProcesados": 7200,
+    "totalEventos": 2,
+    "integrityScore": 60.0,
+    "integritySummary": "Durante la sesión se detectaron dos incidentes: uso de dispositivo adicional y presencia de una segunda persona. El score de integridad de 60/100 indica riesgo moderado.",
+    "eventos": [
+      {
+        "tipo": "dispositivo_prohibido",
+        "detalle": "Detectado: cell phone",
+        "evidencia": "ruta/imagen.jpg",
+        "timestamp": "2026-06-28T15:10:00Z"
+      }
+    ]
+  }
+}
+```
+
+### Campos clave
+
+`integrityScore` — Score de 0 a 100. Se calcula automáticamente la primera vez que la empresa consulta el reporte y se guarda en BD. Fórmula: `max(0, 100 - penalties)`. Penalización por tipo: `camara_cubierta` -30, `dispositivo_prohibido` -20, `segunda_persona` -20, `rostro_ausente` -15, `distraccion` -8, otros -5.
+
+`integritySummary` — Párrafo en español generado por IA (GPT-4o-mini) que resume los incidentes y la confiabilidad del test. Se genera la primera vez y se cachea — las consultas posteriores no consumen tokens.
+
+`eventos[].tipo` — Valores posibles: `"dispositivo_prohibido"`, `"distraccion"`, `"segunda_persona"`, `"camara_cubierta"`, `"rostro_ausente"`.
+
+`eventos[].evidencia` — Ruta o URL del frame capturado como evidencia. Puede ser `null`.
+
+---
+
+## Qué mostrarle a la empresa
+
+- Mostrar `integrityScore` como indicador visual (barra o círculo). Sugerencia: 80-100 verde, 50-79 amarillo, 0-49 rojo.
+- Mostrar `integritySummary` como análisis ejecutivo bajo el score.
+- Si `totalEventos === 0`: badge verde "Sin incidentes detectados".
+- Si `totalEventos > 0`: badge rojo/naranja con el conteo de incidentes y lista de eventos.
+- Si `evidencia` no es `null`: mostrar miniatura o enlace de la imagen capturada.
+
+---
+
+## Errores posibles
+
+| Código | Cuándo ocurre |
+|--------|---------------|
+| 401 | Token inválido o sin rol Company |
+| 403 | El match no pertenece a una oferta de esta empresa |
+| 400 | El candidato todavía no completó el test |
+| 404 | Match, submission o sesión de proctoring no encontrada |

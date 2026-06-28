@@ -111,6 +111,33 @@ public class OpenAIService : IAIService
         };
     }
 
+    public async Task<ProctoringAnalysisDto> AnalyzeProctoringAsync(IEnumerable<ProctoringEvent> events, decimal integrityScore)
+    {
+        var prompt = ProctoringAnalysisPrompt.Build(events, integrityScore);
+
+        var completion = await _openAI.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
+        {
+            Messages =
+            [
+                ChatMessage.FromSystem("Eres un auditor de integridad. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional."),
+                ChatMessage.FromUser(prompt)
+            ],
+            Model = _model,
+            MaxTokens = 400,
+            Temperature = 0.3f
+        });
+
+        var json = ExtractJson(completion, "AnalyzeProctoringAsync");
+
+        var raw = JsonSerializer.Deserialize<ProctoringAnalysisRaw>(json, _jsonOptions)
+            ?? throw new InvalidOperationException("La IA devolvió un JSON vacío al analizar el proctoring.");
+
+        return new ProctoringAnalysisDto
+        {
+            Summary = raw.Summary ?? string.Empty
+        };
+    }
+
     public async Task<SubmissionEvaluationDto> EvaluateSubmissionAsync(Test test, TestSubmission submission)
     {
         var prompt = SubmissionEvaluationPrompt.Build(test, submission);
@@ -238,5 +265,10 @@ public class OpenAIService : IAIService
         public int QuestionId { get; set; }
         public bool IsCorrect { get; set; }
         public string? Feedback { get; set; }
+    }
+
+    private sealed class ProctoringAnalysisRaw
+    {
+        public string? Summary { get; set; }
     }
 }

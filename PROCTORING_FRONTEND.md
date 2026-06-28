@@ -129,6 +129,8 @@ El parámetro es el `matchId`, igual que en `GET /api/tests/submissions/{matchId
     "fin": "2026-06-28T16:00:00Z",
     "totalFramesProcesados": 7200,
     "totalEventos": 3,
+    "integrityScore": 60.0,
+    "integritySummary": "Durante la sesión se detectaron tres incidentes relevantes: uso de un dispositivo adicional a los 10 minutos, ausencia prolongada de pantalla y presencia de una segunda persona hacia el final. El score de integridad de 60/100 indica riesgo moderado y se recomienda revisar los resultados con precaución.",
     "eventos": [
       {
         "tipo": "dispositivo_prohibido",
@@ -167,6 +169,10 @@ El parámetro es el `matchId`, igual que en `GET /api/tests/submissions/{matchId
 
 `totalEventos` — Cantidad total de eventos sospechosos detectados. Útil para mostrar un contador rápido sin iterar los eventos.
 
+`integrityScore` — Score numérico de 0 a 100 calculado con la fórmula determinística. Se descuenta por tipo de evento: `camara_cubierta` -30, `dispositivo_prohibido` -20, `segunda_persona` -20, `rostro_ausente` -15, `distraccion` -8, otros -5. Mínimo 0. Se calcula la primera vez que la empresa consulta el reporte y se cachea en BD.
+
+`integritySummary` — Resumen ejecutivo en español generado por GPT-4o-mini analizando los eventos y el score. Se genera la primera vez que la empresa consulta el reporte y se cachea en BD (no se vuelve a llamar a la IA en consultas subsiguientes).
+
 `eventos` — Lista de eventos ordenados cronológicamente.
 
 ---
@@ -192,6 +198,8 @@ El parámetro es el `matchId`, igual que en `GET /api/tests/submissions/{matchId
 
 Con este endpoint se puede construir una sección de "Reporte de integridad" dentro de la vista de resultados del candidato:
 
+- Mostrar `integrityScore` como indicador visual (barra de progreso o círculo). Sugerencia de colores: 80-100 verde, 50-79 amarillo, 0-49 rojo.
+- Mostrar `integritySummary` como párrafo de contexto bajo el score — es el análisis cualitativo de la IA.
 - Si `totalEventos === 0`: mostrar un badge verde "Sin incidentes detectados"
 - Si `totalEventos > 0`: mostrar un badge rojo/naranja con el número de incidentes y listar los eventos
 - Para cada evento: mostrar el `tipo` como etiqueta, el `detalle` como descripción y el `timestamp` formateado

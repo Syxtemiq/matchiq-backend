@@ -451,6 +451,8 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.Inicio).HasColumnName("inicio").HasColumnType("timestamp").IsRequired();
             e.Property(x => x.Fin).HasColumnName("fin").HasColumnType("timestamp");
             e.Property(x => x.TotalFramesProcesados).HasColumnName("total_frames_procesados");
+            e.Property(x => x.IntegrityScore).HasColumnName("integrity_score").HasPrecision(5, 2);
+            e.Property(x => x.IntegritySummary).HasColumnName("integrity_summary");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.SessionId).IsUnique();

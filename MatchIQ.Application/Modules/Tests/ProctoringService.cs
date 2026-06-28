@@ -1,5 +1,6 @@
 using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Tests.Dtos;
+using MatchIQ.Domain.Entities;
 using MatchIQ.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,10 +9,12 @@ namespace MatchIQ.Application.Modules.Tests;
 public class ProctoringService
 {
     private readonly IAppDbContext _context;
+    private readonly IAIService _aiService;
 
-    public ProctoringService(IAppDbContext context)
+    public ProctoringService(IAppDbContext context, IAIService aiService)
     {
         _context = context;
+        _aiService = aiService;
     }
 
     public async Task<ProctoringReportDto> GetReportByMatchAsync(int matchId, int companyUserId)
@@ -46,14 +49,31 @@ public class ProctoringService
             .FirstOrDefaultAsync()
             ?? throw new KeyNotFoundException("No hay reporte de proctoring para este candidato.");
 
+        // Calcular score si aún no existe
+        if (session.IntegrityScore is null)
+        {
+            session.IntegrityScore = CalculateScore(session.Events);
+            await _context.SaveChangesAsync(default);
+        }
+
+        // Generar resumen de IA si aún no existe (se cachea para no re-gastar tokens)
+        if (session.IntegritySummary is null)
+        {
+            var analysis = await _aiService.AnalyzeProctoringAsync(session.Events, session.IntegrityScore.Value);
+            session.IntegritySummary = analysis.Summary;
+            await _context.SaveChangesAsync(default);
+        }
+
         return new ProctoringReportDto
         {
-            SessionId            = session.SessionId,
-            Inicio               = session.Inicio,
-            Fin                  = session.Fin,
+            SessionId             = session.SessionId,
+            Inicio                = session.Inicio,
+            Fin                   = session.Fin,
             TotalFramesProcesados = session.TotalFramesProcesados,
-            TotalEventos         = session.Events.Count,
-            Eventos              = session.Events
+            TotalEventos          = session.Events.Count,
+            IntegrityScore        = session.IntegrityScore,
+            IntegritySummary      = session.IntegritySummary,
+            Eventos               = session.Events
                 .OrderBy(e => e.Timestamp)
                 .Select(e => new ProctoringEventDto
                 {
@@ -64,5 +84,27 @@ public class ProctoringService
                 })
                 .ToList()
         };
+    }
+
+    // ── score determinístico ──────────────────────────────────────────────────
+
+    private static decimal CalculateScore(IEnumerable<ProctoringEvent> events)
+    {
+        var penalty = 0m;
+
+        foreach (var ev in events)
+        {
+            penalty += ev.Tipo switch
+            {
+                "camara_cubierta"     => 30m,
+                "dispositivo_prohibido" => 20m,
+                "segunda_persona"     => 20m,
+                "rostro_ausente"      => 15m,
+                "distraccion"         => 8m,
+                _                     => 5m
+            };
+        }
+
+        return Math.Max(0m, 100m - penalty);
     }
 }

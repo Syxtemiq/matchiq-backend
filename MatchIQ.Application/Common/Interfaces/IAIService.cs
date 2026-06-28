@@ -9,4 +9,5 @@ public interface IAIService
     Task<GeneratedQuestionDto> RegenerateQuestionAsync(TestQuestion question, IEnumerable<QuestionChatMessage> history, string adminMessage);
     Task<CandidateInsightDto> EvaluateCandidateAsync(JobOffer offer, Match match);
     Task<SubmissionEvaluationDto> EvaluateSubmissionAsync(Test test, TestSubmission submission);
+    Task<ProctoringAnalysisDto> AnalyzeProctoringAsync(IEnumerable<ProctoringEvent> events, decimal integrityScore);
 }
