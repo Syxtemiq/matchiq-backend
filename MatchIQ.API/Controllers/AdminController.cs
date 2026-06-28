@@ -1,4 +1,5 @@
 using MatchIQ.API.Common;
+using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Admin.Dtos;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +13,12 @@ namespace MatchIQ.API.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly AdminService _adminService;
+    private readonly IReportService _reportService;
 
-    public AdminController(AdminService adminService)
+    public AdminController(AdminService adminService, IReportService reportService)
     {
         _adminService = adminService;
+        _reportService = reportService;
     }
 
     [HttpPost("users")]
@@ -61,5 +64,13 @@ public class AdminController : ControllerBase
     {
         var stats = await _adminService.GetStatsAsync();
         return Ok(ApiResponse.Ok(stats));
+    }
+
+    [HttpGet("report")]
+    public async Task<IActionResult> DownloadReport()
+    {
+        var bytes = await _reportService.GenerateAdminReportAsync();
+        var fileName = $"matchiq-reporte-admin-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 }

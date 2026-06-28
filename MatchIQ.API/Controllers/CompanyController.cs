@@ -14,11 +14,13 @@ public class CompanyController : ControllerBase
 {
     private readonly CompanyService _companyService;
     private readonly ICurrentUserService _currentUser;
+    private readonly IReportService _reportService;
 
-    public CompanyController(CompanyService companyService, ICurrentUserService currentUser)
+    public CompanyController(CompanyService companyService, ICurrentUserService currentUser, IReportService reportService)
     {
         _companyService = companyService;
         _currentUser = currentUser;
+        _reportService = reportService;
     }
 
     [HttpGet("dashboard")]
@@ -40,5 +42,13 @@ public class CompanyController : ControllerBase
     {
         var profile = await _companyService.UpdateProfileAsync(_currentUser.UserId, dto);
         return Ok(ApiResponse.Ok(profile, "Perfil actualizado correctamente."));
+    }
+
+    [HttpGet("report")]
+    public async Task<IActionResult> DownloadReport()
+    {
+        var bytes = await _reportService.GenerateCompanyReportAsync(_currentUser.UserId);
+        var fileName = $"matchiq-reporte-empresa-{DateTime.UtcNow:yyyy-MM-dd}.xlsx";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 }
