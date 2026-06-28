@@ -46,8 +46,21 @@ public class StripeService : IPaymentService
             throw new InvalidOperationException("La oferta no está pendiente de pago.");
 
         var payment = await _context.Payments
-            .FirstOrDefaultAsync(p => p.OfferId == offerId)
-            ?? throw new KeyNotFoundException("Registro de pago no encontrado.");
+            .FirstOrDefaultAsync(p => p.OfferId == offerId);
+
+        // Si no existe el pago (datos de prueba creados durante período de bugs), crearlo ahora
+        if (payment is null)
+        {
+            payment = new Domain.Entities.Payment
+            {
+                OfferId   = offer.Id,
+                TierId    = offer.TierId,
+                AmountCop = offer.PricingTier.PriceCop,
+                Status    = Domain.Enums.PaymentStatus.Pending
+            };
+            _context.Payments.Add(payment);
+            await _context.SaveChangesAsync();
+        }
 
         // Idempotencia: revisar sesión existente antes de crear una nueva
         if (!string.IsNullOrEmpty(payment.PaymentCheckoutId))
