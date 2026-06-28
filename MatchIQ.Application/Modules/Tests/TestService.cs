@@ -341,6 +341,93 @@ public class TestService
         };
     }
 
+    public async Task<CandidateSubmissionDetailDto> GetCandidateSubmissionAsync(int matchId, int companyUserId)
+    {
+        var company = await _context.CompanyProfiles
+            .FirstOrDefaultAsync(c => c.UserId == companyUserId)
+            ?? throw new KeyNotFoundException("Perfil de empresa no encontrado.");
+
+        var match = await _context.Matches
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
+            .Include(m => m.JobOffer)
+            .FirstOrDefaultAsync(m => m.Id == matchId)
+            ?? throw new KeyNotFoundException("Match no encontrado.");
+
+        if (match.JobOffer.CompanyId != company.Id)
+            throw new UnauthorizedAccessException("No tienes acceso a este match.");
+
+        if (match.Stage < MatchStage.TestCompleted)
+            throw new InvalidOperationException("El candidato aún no ha completado el test.");
+
+        var test = await _context.Tests
+            .Include(t => t.TestQuestions.OrderBy(q => q.OrderIndex))
+            .FirstOrDefaultAsync(t => t.OfferId == match.OfferId)
+            ?? throw new KeyNotFoundException("Test no encontrado.");
+
+        var submission = await _context.TestSubmissions
+            .FirstOrDefaultAsync(s => s.TestId == test.Id && s.CandidateId == match.CandidateId)
+            ?? throw new KeyNotFoundException("No se encontró la submission de este candidato.");
+
+        // Deserializar respuestas del candidato
+        List<AnswerItemDto> answers = [];
+        if (submission.AnswersJson is not null)
+        {
+            try { answers = JsonSerializer.Deserialize<List<AnswerItemDto>>(submission.AnswersJson) ?? []; }
+            catch { /* respuestas malformadas */ }
+        }
+        var answersMap = answers.ToDictionary(a => a.QuestionId);
+
+        // Deserializar evaluación de la IA
+        SubmissionEvaluationDto? evaluation = null;
+        if (submission.Feedback is not null)
+        {
+            try { evaluation = JsonSerializer.Deserialize<SubmissionEvaluationDto>(submission.Feedback); }
+            catch { /* feedback malformado */ }
+        }
+        var evalMap = evaluation?.QuestionResults.ToDictionary(q => q.QuestionId) ?? [];
+
+        var questions = test.TestQuestions.Select(q =>
+        {
+            answersMap.TryGetValue(q.Id, out var answer);
+            evalMap.TryGetValue(q.Id, out var eval);
+
+            Dictionary<string, string>? options = null;
+            if (q.OptionsJson is not null)
+            {
+                try { options = JsonSerializer.Deserialize<Dictionary<string, string>>(q.OptionsJson); }
+                catch { /* ignorar */ }
+            }
+
+            return new QuestionSubmissionDetailDto
+            {
+                QuestionId       = q.Id,
+                OrderIndex       = q.OrderIndex,
+                QuestionType     = q.QuestionType.ToString(),
+                QuestionText     = q.QuestionText,
+                Options          = options,
+                CorrectAnswer    = q.CorrectAnswer,
+                SelectedOption   = answer?.SelectedOption,
+                FunctionSignature = q.FunctionSignature,
+                ExpectedBehavior = q.ExpectedBehavior,
+                CodeSubmitted    = answer?.CodeSubmitted,
+                IsCorrect        = eval?.IsCorrect,
+                AiFeedback       = eval?.Feedback
+            };
+        }).ToList();
+
+        return new CandidateSubmissionDetailDto
+        {
+            MatchId           = match.Id,
+            CandidateFullName = match.CandidateProfile.User.FullName,
+            Score             = submission.Score,
+            GlobalFeedback    = evaluation?.Feedback,
+            Status            = submission.Status.ToString(),
+            SubmittedAt       = submission.SubmittedAt,
+            AiEvaluatedAt     = submission.AiEvaluatedAt,
+            Questions         = questions
+        };
+    }
+
     // Llamado por el DailyJob para reeintentar evaluaciones cuya llamada IA falló anteriormente.
     // Solo procesa submissions con SubmittedAt != null y Status == Pending.
     public async Task RetryPendingEvaluationsAsync()
