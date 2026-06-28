@@ -153,10 +153,37 @@ public class AdminService
     {
         var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
 
-        var totalCandidates = await _context.Users.CountAsync(u => u.Role == UserRole.Candidate);
-        var totalCompanies = await _context.Users.CountAsync(u => u.Role == UserRole.Company);
-        var totalOffers = await _context.JobOffers.CountAsync();
-        var totalMatches = await _context.Matches.CountAsync();
+        // ── Usuarios ────────────────────────────────────────────
+        var totalCandidates       = await _context.Users.CountAsync(u => u.Role == UserRole.Candidate);
+        var totalCompanies        = await _context.Users.CountAsync(u => u.Role == UserRole.Company);
+        var usersLast30Days       = await _context.Users.CountAsync(u => u.CreatedAt >= thirtyDaysAgo);
+
+        // ── Ofertas ─────────────────────────────────────────────
+        var offersByStatus = await _context.JobOffers
+            .GroupBy(o => o.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var offersMap       = offersByStatus.ToDictionary(x => x.Status, x => x.Count);
+        var totalOffers     = offersByStatus.Sum(x => x.Count);
+        var offersLast30Days = await _context.JobOffers.CountAsync(o => o.CreatedAt >= thirtyDaysAgo);
+
+        // ── Matching ────────────────────────────────────────────
+        var matchesByStage = await _context.Matches
+            .GroupBy(m => m.Stage)
+            .Select(g => new { Stage = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var stageMap = matchesByStage.ToDictionary(x => x.Stage, x => x.Count);
+        var totalMatches = matchesByStage.Sum(x => x.Count);
+
+        // ── Tests ───────────────────────────────────────────────
+        var submissionsByStatus = await _context.TestSubmissions
+            .GroupBy(s => s.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var subMap = submissionsByStatus.ToDictionary(x => x.Status, x => x.Count);
 
         var activeTests = await _context.TestSubmissions
             .Where(s => s.Status == SubmissionStatus.Pending)
@@ -164,31 +191,74 @@ public class AdminService
             .Distinct()
             .CountAsync();
 
-        var pendingSubmissions = await _context.TestSubmissions
-            .CountAsync(s => s.Status == SubmissionStatus.Pending);
+        var pendingSubmissions = subMap.GetValueOrDefault(SubmissionStatus.Pending, 0);
+        var evaluated          = subMap.GetValueOrDefault(SubmissionStatus.Evaluated, 0);
+        var expired            = subMap.GetValueOrDefault(SubmissionStatus.Expired, 0);
 
-        var offersByStatus = await _context.JobOffers
-            .GroupBy(o => o.Status)
-            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
-            .ToListAsync();
+        var avgScore = await _context.TestSubmissions
+            .Where(s => s.Status == SubmissionStatus.Evaluated && s.Score != null)
+            .AverageAsync(s => (decimal?)s.Score) ?? 0m;
 
-        var usersLast30Days = await _context.Users
-            .CountAsync(u => u.CreatedAt >= thirtyDaysAgo);
+        // ── Ingresos ────────────────────────────────────────────
+        var totalRevenue       = await _context.Payments
+            .Where(p => p.Status == PaymentStatus.Succeeded)
+            .SumAsync(p => (decimal?)p.AmountCop) ?? 0m;
+        var paymentsCompleted  = await _context.Payments.CountAsync(p => p.Status == PaymentStatus.Succeeded);
+        var paymentsPending    = await _context.Payments.CountAsync(p => p.Status == PaymentStatus.Pending);
 
-        var offersLast30Days = await _context.JobOffers
-            .CountAsync(o => o.CreatedAt >= thirtyDaysAgo);
+        // ── Tasas ───────────────────────────────────────────────
+        var totalFinishedSubs  = evaluated + expired;
+        var testCompletionRate = totalFinishedSubs > 0
+            ? Math.Round((decimal)evaluated / totalFinishedSubs * 100, 1)
+            : 0m;
+
+        var testCompleted      = stageMap.GetValueOrDefault(MatchStage.TestCompleted, 0);
+        var selected           = stageMap.GetValueOrDefault(MatchStage.Selected, 0);
+        var rejected           = stageMap.GetValueOrDefault(MatchStage.Rejected, 0);
+        var selectionBase      = testCompleted + selected + rejected;
+        var selectionRate      = selectionBase > 0
+            ? Math.Round((decimal)selected / selectionBase * 100, 1)
+            : 0m;
 
         return new SystemStatsDto
         {
-            TotalCandidates = totalCandidates,
-            TotalCompanies = totalCompanies,
-            TotalOffers = totalOffers,
-            TotalMatches = totalMatches,
-            ActiveTests = activeTests,
-            PendingSubmissions = pendingSubmissions,
-            OffersByStatus = offersByStatus.ToDictionary(x => x.Status, x => x.Count),
+            // Usuarios
+            TotalCandidates          = totalCandidates,
+            TotalCompanies           = totalCompanies,
             UsersRegisteredLast30Days = usersLast30Days,
-            OffersCreatedLast30Days = offersLast30Days
+
+            // Ofertas
+            TotalOffers              = totalOffers,
+            OffersCreatedLast30Days  = offersLast30Days,
+            OffersActive             = offersMap.GetValueOrDefault(OfferStatus.Open, 0),
+            OffersCompleted          = offersMap.GetValueOrDefault(OfferStatus.Completed, 0),
+            OffersCancelled          = offersMap.GetValueOrDefault(OfferStatus.Cancelled, 0),
+            OffersExpired            = offersMap.GetValueOrDefault(OfferStatus.Expired, 0),
+            OffersPendingPayment     = offersMap.GetValueOrDefault(OfferStatus.PendingPayment, 0),
+            OffersByStatus           = offersMap.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+
+            // Matching
+            TotalMatches             = totalMatches,
+            MatchesSelected          = selected,
+            MatchesRejected          = rejected,
+            MatchesTestSent          = stageMap.GetValueOrDefault(MatchStage.TestSent, 0),
+            MatchesTestCompleted     = testCompleted,
+
+            // Tests
+            ActiveTests              = activeTests,
+            PendingSubmissions       = pendingSubmissions,
+            SubmissionsEvaluated     = evaluated,
+            SubmissionsExpired       = expired,
+            AverageTestScore         = Math.Round(avgScore, 1),
+
+            // Ingresos
+            TotalRevenueCop          = totalRevenue,
+            PaymentsCompleted        = paymentsCompleted,
+            PaymentsPending          = paymentsPending,
+
+            // Tasas
+            TestCompletionRate       = testCompletionRate,
+            SelectionRate            = selectionRate
         };
     }
 }
