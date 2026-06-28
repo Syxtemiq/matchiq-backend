@@ -22,7 +22,7 @@ public class MatchRepository : IMatchRepository
     {
         var rawResults = await _context.Database
             .SqlQuery<MatchResultRaw>(
-                $"SELECT candidate_id AS \"CandidateId\", match_percentage AS \"MatchPercentage\" FROM get_candidate_matches({offerId})")
+                $"SELECT candidate_id AS \"CandidateId\", final_match_percentage AS \"MatchPercentage\" FROM get_candidate_matches({offerId})")
             .ToListAsync();
 
         var existingMatches = await _context.Matches
