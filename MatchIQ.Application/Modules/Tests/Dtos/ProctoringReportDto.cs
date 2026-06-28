@@ -7,6 +7,8 @@ public class ProctoringReportDto
     public DateTime? Fin { get; set; }
     public int? TotalFramesProcesados { get; set; }
     public int TotalEventos { get; set; }
+    public decimal? IntegrityScore { get; set; }
+    public string? IntegritySummary { get; set; }
     public List<ProctoringEventDto> Eventos { get; set; } = [];
 }
 

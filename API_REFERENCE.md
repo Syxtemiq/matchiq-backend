@@ -1301,7 +1301,26 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 **Sin body.** Registra `startedAt` en el primer acceso y recalcula el deadline al `startedAt + timeLimitMinutes`. Devuelve las preguntas **sin** respuestas correctas ni hints. Llamar únicamente cuando el candidato confirme "quiero empezar" — no hay vuelta atrás.
 
-**Respuesta exitosa:** igual que generar test, pero `correctAnswer`, `explanation`, `isGorilla` y `gorillaHint` siempre vienen `null`.
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "data": {
+    "submissionId": 456,
+    "test": {
+      "id": 3,
+      "offerId": 7,
+      "title": "Test técnico — Desarrollador React Senior",
+      "timeLimitMinutes": 45,
+      "createdAt": "2026-06-25T14:30:00Z",
+      "questions": [ /* igual que generar test, pero correctAnswer, explanation, isGorilla y gorillaHint vienen null */ ]
+    }
+  },
+  "message": null
+}
+```
+
+> **Importante:** la respuesta tiene dos campos raíz — `submissionId` y `test`. El test con las preguntas vive dentro de `test`. Guardar `submissionId` de inmediato y pasarlo al servicio de proctoring (Python) al iniciar la sesión de monitoreo.
 
 **Errores posibles:**
 
@@ -1399,6 +1418,61 @@ Devuelve el resultado si ya fue evaluado.
 | 400 | `"Aún no has enviado tus respuestas."` |
 | 401 | `"No tienes una submission para este test."` |
 | 404 | `"Perfil de candidato no encontrado."` |
+
+---
+
+### 43. Ver reporte de proctoring de un candidato (empresa)
+`GET /api/tests/submissions/{matchId}/proctoring` · 🏢 Company
+
+Devuelve el reporte comportamental de la sesión de proctoring (monitoreo de IA) del candidato durante el test. Solo disponible después de que el candidato completó el test (`stage >= TestCompleted`). El score de integridad y el resumen de IA se calculan la primera vez que se consulta y se cachean en BD.
+
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "data": {
+    "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+    "inicio": "2026-06-28T15:00:00Z",
+    "fin": "2026-06-28T16:00:00Z",
+    "totalFramesProcesados": 7200,
+    "totalEventos": 2,
+    "integrityScore": 60.0,
+    "integritySummary": "Durante la sesión se detectaron dos incidentes: uso de dispositivo adicional y presencia de una segunda persona. El score de integridad de 60/100 indica riesgo moderado.",
+    "eventos": [
+      {
+        "tipo": "dispositivo_prohibido",
+        "detalle": "Detectado: cell phone",
+        "evidencia": "ruta/imagen.jpg",
+        "timestamp": "2026-06-28T15:10:00Z"
+      },
+      {
+        "tipo": "segunda_persona",
+        "detalle": "Intruso presente por más de 10s",
+        "evidencia": null,
+        "timestamp": "2026-06-28T15:40:00Z"
+      }
+    ]
+  }
+}
+```
+
+**Fórmula del `integrityScore`:** `max(0, 100 - Σpenalties)`. Penalizaciones por tipo: `camara_cubierta` -30, `dispositivo_prohibido` -20, `segunda_persona` -20, `rostro_ausente` -15, `distraccion` -8, otros -5.
+
+**Valores de `tipo` en eventos:**
+- `"dispositivo_prohibido"` — se detectó un segundo dispositivo (celular, tablet, etc.)
+- `"distraccion"` — el candidato estuvo fuera de pantalla por más de 10 segundos
+- `"segunda_persona"` — se detectó otra persona en el frame
+- `"camara_cubierta"` — la cámara fue tapada o bloqueada
+- `"rostro_ausente"` — no se detectó ningún rostro en el frame por tiempo prolongado
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 401 | Sin token o sin rol Company |
+| 403 | El match no pertenece a una oferta de esta empresa |
+| 400 | El candidato todavía no completó el test |
+| 404 | Match, submission o sesión de proctoring no encontrada |
 
 ---
 
@@ -1544,50 +1618,43 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 {
   "success": true,
   "data": {
-    "usuarios": {
-      "totalCandidates": 120,
-      "totalCompanies": 35,
-      "usersRegisteredLast30Days": 45
+    "totalCandidates": 120,
+    "totalCompanies": 35,
+    "usersRegisteredLast30Days": 45,
+
+    "totalOffers": 58,
+    "offersCreatedLast30Days": 10,
+    "offersActive": 18,
+    "offersCompleted": 20,
+    "offersCancelled": 3,
+    "offersExpired": 1,
+    "offersPendingPayment": 5,
+    "offersByStatus": {
+      "PendingPayment": 5,
+      "Open": 18,
+      "Completed": 20,
+      "Cancelled": 3,
+      "Expired": 1
     },
-    "ofertas": {
-      "totalOffers": 58,
-      "offersCreatedLast30Days": 10,
-      "offersActive": 18,
-      "offersCompleted": 20,
-      "offersCancelled": 3,
-      "offersExpired": 1,
-      "offersPendingPayment": 5,
-      "offersByStatus": {
-        "PendingPayment": 5,
-        "Open": 18,
-        "Completed": 20,
-        "Cancelled": 3,
-        "Expired": 1
-      }
-    },
-    "matching": {
-      "totalMatches": 430,
-      "matchesSelected": 28,
-      "matchesRejected": 45,
-      "matchesTestSent": 62,
-      "matchesTestCompleted": 38
-    },
-    "tests": {
-      "activeTests": 12,
-      "pendingSubmissions": 8,
-      "submissionsEvaluated": 95,
-      "submissionsExpired": 12,
-      "averageTestScore": 74.3
-    },
-    "ingresos": {
-      "totalRevenueCop": 4850000.00,
-      "paymentsCompleted": 24,
-      "paymentsPending": 3
-    },
-    "tasas": {
-      "testCompletionRate": 88.8,
-      "selectionRate": 25.2
-    }
+
+    "totalMatches": 430,
+    "matchesSelected": 28,
+    "matchesRejected": 45,
+    "matchesTestSent": 62,
+    "matchesTestCompleted": 38,
+
+    "activeTests": 12,
+    "pendingSubmissions": 8,
+    "submissionsEvaluated": 95,
+    "submissionsExpired": 12,
+    "averageTestScore": 74.3,
+
+    "totalRevenueCop": 4850000.00,
+    "paymentsCompleted": 24,
+    "paymentsPending": 3,
+
+    "testCompletionRate": 88.8,
+    "selectionRate": 25.2
   },
   "message": null
 }

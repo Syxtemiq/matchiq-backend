@@ -9,6 +9,8 @@ public class ProctoringSession
     public DateTime Inicio { get; set; }
     public DateTime? Fin { get; set; }
     public int? TotalFramesProcesados { get; set; }
+    public decimal? IntegrityScore { get; set; }
+    public string? IntegritySummary { get; set; }
     public DateTime CreatedAt { get; set; }
 
     public TestSubmission? Submission { get; set; }
