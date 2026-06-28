@@ -67,6 +67,14 @@ public class TestsController : ControllerBase
         return Ok(ApiResponse.Ok(result));
     }
 
+    [HttpGet("submissions/{matchId:int}")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetCandidateSubmission(int matchId)
+    {
+        var detail = await _testService.GetCandidateSubmissionAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(detail));
+    }
+
     // ── Candidato ─────────────────────────────────────────────────────────────────
 
     [HttpGet("candidate")]

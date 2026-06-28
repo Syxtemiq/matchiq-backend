@@ -792,27 +792,73 @@ Cancela aunque haya candidatos en proceso. Llamar solo si el usuario confirmó l
 
 Base path: `/api/payments`
 
+> **Pasarela activa: Stripe Checkout** — Stripe hospeda la página de pago con tarjeta. Para desarrollo se usan las tarjetas de prueba de Stripe (ver sección al final).
+
 ---
 
-### 24. Crear link de pago
+### 24. Crear sesión de pago (Stripe)
 `POST /api/payments/create-checkout?offerId=7` · 🏢 Company · ⚡ 5 req/5min por usuario
 
-La oferta debe estar en estado `PendingPayment`. Si ya se generó un link antes, devuelve el mismo (idempotente).
+La oferta debe estar en estado `PendingPayment`. Si ya existe una sesión abierta para esta oferta, devuelve la misma URL (idempotente). Si la sesión ya fue pagada pero `verify-session` nunca fue llamado, el backend activa la oferta automáticamente y responde con un 400.
 
 **Sin body** — `offerId` va en el query string.
 
 **Respuesta exitosa:**
 ```json
-{ "success": true, "data": { "url": "https://checkout.wompi.co/l/..." }, "message": null }
+{ "success": true, "data": { "url": "https://checkout.stripe.com/pay/cs_test_..." }, "message": null }
 ```
-> Redirige al usuario a esa URL. Al pagar, el webhook activa la oferta automáticamente, corre el matching inicial y bloquea cualquier edición futura.
+
+> **Flujo frontend:**
+> 1. Llamar este endpoint y redirigir al usuario a `data.url` (Stripe Checkout hospedado).
+> 2. Stripe redirige de vuelta a `SuccessUrl?offerId={id}&session_id={CHECKOUT_SESSION_ID}` al pagar.
+> 3. **Inmediatamente al aterrizaje en la pantalla de éxito**, llamar `POST /api/payments/verify-session?sessionId={session_id}` para activar la oferta.
+> 4. Si el usuario cierra la ventana antes de confirmar el pago, Stripe redirige a `CancelUrl?offerId={id}&success=false`. No se cobra nada; la sesión de Stripe queda abierta y al volver a llamar `create-checkout` se recupera la misma URL.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"La oferta no está pendiente de pago."` |
+| 400 | `"El pago ya fue procesado. La oferta ha sido activada."` |
+| 404 | `"Perfil de empresa no encontrado."` |
+| 404 | `"Oferta no encontrada."` |
 
 ---
 
-### 25. Webhook de Wompi
-`POST /api/payments/webhook` · 🔓 Público (solo para Wompi)
+### 25. Verificar y activar pago
+`POST /api/payments/verify-session?sessionId=cs_test_...` · 🏢 Company
 
-> **No llamar desde el frontend.** Este endpoint es exclusivo para que Wompi notifique al backend cuando un pago es aprobado. Se configura en el dashboard de Wompi.
+Consulta directamente la API de Stripe con el `session_id` recibido en la redirección de éxito. Si Stripe confirma `payment_status = "paid"`, activa la oferta (`PendingPayment` → `Open`), ejecuta el matching inicial y bloquea ediciones futuras. Idempotente — si ya fue activada, devuelve `activated: true` sin efectos secundarios.
+
+**Sin body** — `sessionId` va en el query string.
+
+**Respuesta exitosa (pago aprobado y oferta activada):**
+```json
+{ "success": true, "data": { "activated": true }, "message": "Pago verificado. Oferta activada." }
+```
+
+**Respuesta exitosa (Stripe aún no confirmó el pago):**
+```json
+{ "success": true, "data": { "activated": false }, "message": "El pago aún no ha sido procesado." }
+```
+
+> Si `activated = false`, el pago no completó todavía. Mostrar feedback al usuario y permitirle reintentar en unos segundos.
+
+**Errores posibles:**
+
+| HTTP | `message` |
+|---|---|
+| 400 | `"No se pudo verificar la sesión de pago: ..."` |
+| 401 | `"No tienes acceso a esta oferta."` |
+| 404 | `"No se encontró el registro de pago para esta sesión."` |
+| 404 | `"Perfil de empresa no encontrado."` |
+
+---
+
+### 26. Webhook de Stripe
+`POST /api/payments/webhook` · 🔓 Público (solo para Stripe)
+
+> **No llamar desde el frontend.** Endpoint para que Stripe notifique eventos de pago al backend. En el MVP local no se configura (el flujo usa `verify-session` en su lugar). En producción se configura en el dashboard de Stripe con el evento `checkout.session.completed`. Cuando `Stripe:WebhookSecret` está vacío en la configuración, el backend procesa el evento sin verificar la firma (solo desarrollo).
 
 ---
 
@@ -824,7 +870,7 @@ Base path: `/api/matching`
 
 ---
 
-### 26. Ver ranking de candidatos
+### 27. Ver ranking de candidatos
 `GET /api/matching/{offerId}` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -869,7 +915,7 @@ Base path: `/api/matching`
 
 ---
 
-### 27. Ejecutar matching manualmente
+### 28. Ejecutar matching manualmente
 `POST /api/matching/{offerId}/run` · 🏢 Company
 
 Corre el matching incremental (solo candidatos nuevos sin match previo). Normalmente ocurre automático al activar la oferta; este endpoint permite forzarlo.
@@ -888,7 +934,7 @@ Corre el matching incremental (solo candidatos nuevos sin match previo). Normalm
 
 ---
 
-### 28. Reevaluar ranking completo
+### 29. Reevaluar ranking completo
 `POST /api/matching/{offerId}/reevaluate` · 🏢 Company
 
 Recalcula el score de TODOS los candidatos.
@@ -910,7 +956,7 @@ Recalcula el score de TODOS los candidatos.
 
 ---
 
-### 29. Enviar test a candidatos
+### 30. Enviar test a candidatos
 `POST /api/matching/send-test` · 🏢 Company
 
 Los candidatos reciben un email con link directo al test. Solo se puede enviar a candidatos en stage `Matched`. El candidato tendrá `testDeadlineDays` días (definido al crear la oferta) para abrir el test.
@@ -943,7 +989,7 @@ Los candidatos reciben un email con link directo al test. Solo se puede enviar a
 
 ---
 
-### 30. Seleccionar candidato
+### 31. Seleccionar candidato
 `POST /api/matching/{matchId}/select` · 🏢 Company
 
 Solo desde stage `TestCompleted`. Si al seleccionar se llenan todas las posiciones disponibles, la oferta pasa a `Completed` automáticamente. El candidato recibe un email de notificación (best-effort).
@@ -965,7 +1011,7 @@ Solo desde stage `TestCompleted`. Si al seleccionar se llenan todas las posicion
 
 ---
 
-### 31. Rechazar candidato
+### 32. Rechazar candidato
 `POST /api/matching/{matchId}/reject` · 🏢 Company
 
 Se puede rechazar desde `Matched`, `TestSent` o `TestCompleted`. No desde `Selected`. El candidato recibe un email empático notificando que el proceso no continuó (best-effort).
@@ -996,7 +1042,7 @@ Base path: `/api/tests`
 
 ---
 
-### 32. Generar test con IA
+### 33. Generar test con IA
 `POST /api/tests/{offerId}/generate` · 🏢 Company
 
 Genera el test técnico para la oferta usando IA. Disponible en `PendingPayment` (para preview antes de pagar) y en `Open` si aún no existe test. Si ya existe un test, retorna el existente sin llamar a la IA.
@@ -1067,7 +1113,7 @@ Genera el test técnico para la oferta usando IA. Disponible en `PendingPayment`
 
 ---
 
-### 33. Regenerar test completo
+### 34. Regenerar test completo
 `POST /api/tests/{offerId}/regenerate` · 🏢 Company
 
 Reemplaza el test existente con uno completamente nuevo generado por IA. **Borra el test anterior y todo su historial de chat.** Solo disponible en `PendingPayment` — una vez pagada la oferta, no se puede regenerar.
@@ -1094,7 +1140,7 @@ Reemplaza el test existente con uno completamente nuevo generado por IA. **Borra
 
 ---
 
-### 34. Ver test completo (empresa)
+### 35. Ver test completo (empresa)
 `GET /api/tests/{offerId}` · 🏢 Company
 
 Devuelve el test con `correctAnswer` y `explanation` visibles.
@@ -1110,7 +1156,7 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
 
 ---
 
-### 35. Ver historial de chat de una pregunta
+### 36. Ver historial de chat de una pregunta
 `GET /api/tests/questions/{questionId}/chat` · 🏢 Company
 
 **Respuesta exitosa:**
@@ -1127,7 +1173,7 @@ Devuelve el test con `correctAnswer` y `explanation` visibles.
 
 ---
 
-### 36. Editar pregunta con IA (chat)
+### 37. Editar pregunta con IA (chat)
 `POST /api/tests/questions/{questionId}/chat` · 🏢 Company
 
 Permite modificar una pregunta específica mediante instrucciones en lenguaje natural. **Solo disponible en `PendingPayment`** — una vez pagada la oferta, las preguntas son inmutables.
@@ -1164,7 +1210,7 @@ Permite modificar una pregunta específica mediante instrucciones en lenguaje na
 
 ---
 
-### 37. Listar mis tests (candidato)
+### 38. Listar mis tests (candidato)
 `GET /api/tests/candidate` · 👤 Candidate
 
 Devuelve todos los tests a los que el candidato ha sido invitado, ordenados por deadline descendente.
@@ -1217,7 +1263,7 @@ Devuelve todos los tests a los que el candidato ha sido invitado, ordenados por 
 
 ---
 
-### 38. Ver resumen del test sin iniciarlo (candidato)
+### 39. Ver resumen del test sin iniciarlo (candidato)
 `GET /api/tests/{offerId}/candidate/preview` · 👤 Candidate
 
 Devuelve solo los metadatos del test — título, tiempo límite y conteo de preguntas por tipo. **No toca `startedAt` ni inicia el cronómetro.** Usar para mostrarle al candidato qué le espera antes de que confirme que quiere empezar.
@@ -1250,7 +1296,7 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 39. Iniciar test y obtener preguntas (candidato)
+### 40. Iniciar test y obtener preguntas (candidato)
 `POST /api/tests/{offerId}/candidate/start` · 👤 Candidate
 
 **Sin body.** Registra `startedAt` en el primer acceso y recalcula el deadline al `startedAt + timeLimitMinutes`. Devuelve las preguntas **sin** respuestas correctas ni hints. Llamar únicamente cuando el candidato confirme "quiero empezar" — no hay vuelta atrás.
@@ -1269,7 +1315,7 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 40. Enviar respuestas
+### 41. Enviar respuestas
 `POST /api/tests/{testId}/submit` · 👤 Candidate
 
 **Body:**
@@ -1338,7 +1384,7 @@ Devuelve solo los metadatos del test — título, tiempo límite y conteo de pre
 
 ---
 
-### 41. Ver resultado de un test
+### 42. Ver resultado de un test
 `GET /api/tests/{testId}/result` · 👤 Candidate
 
 Devuelve el resultado si ya fue evaluado.
@@ -1364,7 +1410,7 @@ Base path: `/api/admin`
 
 ---
 
-### 42. Listar usuarios
+### 43. Listar usuarios
 `GET /api/admin/users` · 🛡️ Admin
 
 **Query params opcionales:**
@@ -1397,7 +1443,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 43. Ver usuario por ID
+### 44. Ver usuario por ID
 `GET /api/admin/users/{userId}` · 🛡️ Admin
 
 **Respuesta exitosa:** objeto igual al de la lista.
@@ -1410,7 +1456,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 44. Crear administrador
+### 45. Crear administrador
 `POST /api/admin/users` · 🛡️ Admin
 
 Único endpoint para crear cuentas de tipo Admin. El registro público bloquea este rol.
@@ -1450,7 +1496,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 45. Activar / desactivar cuenta
+### 46. Activar / desactivar cuenta
 `PATCH /api/admin/users/{userId}/toggle-status` · 🛡️ Admin
 
 **Sin body.**
@@ -1469,7 +1515,7 @@ Ejemplo: `GET /api/admin/users?role=Company&isActive=true`
 
 ---
 
-### 46. Eliminar usuario
+### 47. Eliminar usuario
 `DELETE /api/admin/users/{userId}` · 🛡️ Admin
 
 Elimina en cascada: perfil, ofertas, matches, submissions, etc.
@@ -1490,7 +1536,7 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 
 ---
 
-### 47. Estadísticas del sistema
+### 48. Estadísticas del sistema
 `GET /api/admin/stats` · 🛡️ Admin
 
 **Respuesta exitosa:**
@@ -1498,26 +1544,58 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 {
   "success": true,
   "data": {
-    "totalCandidates": 120,
-    "totalCompanies": 35,
-    "totalOffers": 58,
-    "totalMatches": 430,
-    "activeTests": 12,
-    "pendingSubmissions": 8,
-    "offersByStatus": {
-      "PendingPayment": 5,
-      "Open": 18,
-      "TestSent": 12,
-      "Completed": 20,
-      "Cancelled": 2,
-      "Expired": 1
+    "usuarios": {
+      "totalCandidates": 120,
+      "totalCompanies": 35,
+      "usersRegisteredLast30Days": 45
     },
-    "usersRegisteredLast30Days": 45,
-    "offersCreatedLast30Days": 10
+    "ofertas": {
+      "totalOffers": 58,
+      "offersCreatedLast30Days": 10,
+      "offersActive": 18,
+      "offersCompleted": 20,
+      "offersCancelled": 3,
+      "offersExpired": 1,
+      "offersPendingPayment": 5,
+      "offersByStatus": {
+        "PendingPayment": 5,
+        "Open": 18,
+        "Completed": 20,
+        "Cancelled": 3,
+        "Expired": 1
+      }
+    },
+    "matching": {
+      "totalMatches": 430,
+      "matchesSelected": 28,
+      "matchesRejected": 45,
+      "matchesTestSent": 62,
+      "matchesTestCompleted": 38
+    },
+    "tests": {
+      "activeTests": 12,
+      "pendingSubmissions": 8,
+      "submissionsEvaluated": 95,
+      "submissionsExpired": 12,
+      "averageTestScore": 74.3
+    },
+    "ingresos": {
+      "totalRevenueCop": 4850000.00,
+      "paymentsCompleted": 24,
+      "paymentsPending": 3
+    },
+    "tasas": {
+      "testCompletionRate": 88.8,
+      "selectionRate": 25.2
+    }
   },
   "message": null
 }
 ```
+
+> **Descripción de los campos de tasas:**
+> - `testCompletionRate`: porcentaje de submissions evaluadas vs. (evaluadas + expiradas). Mide cuántos candidatos completaron el test a tiempo.
+> - `selectionRate`: porcentaje de candidatos seleccionados vs. (testCompleted + selected + rejected). Mide qué tan exigente está siendo el proceso de selección.
 
 ---
 
@@ -1542,8 +1620,9 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
     → Repetir 9-10 hasta quedar conforme
 
 ── PAGO = PUNTO DE NO RETORNO ─────────────────────────────────────────────────
-11. payments/create-checkout?offerId=X → redirigir al usuario a Wompi
-    [Wompi confirma el pago → webhook activa oferta (Open) → matching inicial corre automático]
+11. payments/create-checkout?offerId=X → redirigir al usuario a Stripe Checkout
+    [Usuario paga → Stripe redirige a SuccessUrl con session_id en la URL]
+    [Frontend llama payments/verify-session?sessionId=... → activa oferta (Open) → matching inicial corre automático]
     [A partir de aquí: oferta, test y preguntas son inmutables]
 
 ── PROCESO DE SELECCIÓN ────────────────────────────────────────────────────────
@@ -1569,19 +1648,23 @@ Elimina en cascada: perfil, ofertas, matches, submissions, etc.
 
 ---
 
-## STRIP DE PRUEBAS (Wompi)
+## Tarjetas de prueba — Stripe
 
 ```
-Pago exitoso          4242 4242 4242 4242
-Pago declinado        4000 0000 0000 0002
-Fondos insuficientes  4000 0000 0000 9995
-Tarjeta expirada      4000 0000 0000 0069
-CVC incorrecto        4000 0000 0000 0127
+Pago exitoso             4242 4242 4242 4242
+Pago declinado           4000 0000 0000 0002
+Fondos insuficientes     4000 0000 0000 9995
+Tarjeta expirada         4000 0000 0000 0069
+CVC incorrecto           4000 0000 0000 0127
+Requiere autenticación   4000 0025 0000 3155  (3D Secure)
 
 En todos usar:
   Fecha: cualquiera futura (ej. 12/29)
   CVC: cualquier 3 dígitos
+  Nombre: cualquier texto
 ```
+
+> Las tarjetas de prueba solo funcionan en modo test de Stripe (`pk_test_...`). En producción se usan tarjetas reales.
 
 ---
 
