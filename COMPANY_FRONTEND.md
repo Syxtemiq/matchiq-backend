@@ -112,6 +112,69 @@ Con este endpoint se puede construir un dashboard de inicio con:
 
 ---
 
+# Reporte de empresa (descarga Excel)
+
+## Endpoint
+
+```
+GET /api/company/report
+Authorization: Bearer <token>   (rol: Company)
+```
+
+Devuelve un archivo `.xlsx` con dos hojas con toda la actividad de la empresa. El frontend debe tratarlo como descarga de archivo, no como JSON.
+
+### Cómo manejar la descarga en el frontend
+
+```js
+const response = await fetch('/api/company/report', {
+  headers: { Authorization: `Bearer ${token}` }
+});
+const blob = await response.blob();
+const url  = URL.createObjectURL(blob);
+const a    = document.createElement('a');
+a.href     = url;
+a.download = 'reporte-empresa.xlsx';
+a.click();
+URL.revokeObjectURL(url);
+```
+
+### Hoja 1 — Mis Ofertas
+
+Una fila por cada oferta de la empresa con:
+
+`Título` — nombre de la oferta.
+`Estado` — Open, TestSent, Completed, Cancelled, Expired, PendingPayment.
+`Modalidad` — Remote, Hybrid, OnSite, etc.
+`Salario (COP)` — salario publicado, o "—" si no se especificó.
+`Posiciones` — cuántas vacantes tenía la oferta.
+`Tier` — plan contratado para esa oferta.
+`Candidatos a testear` — cuántos candidatos estaban programados para recibir el test.
+`Test enviado el` — fecha en que se envió el test, o "—".
+`Creada el` — fecha de creación de la oferta.
+`Total matches` — cuántos candidatos hicieron match.
+`Tests enviados` — cuántos recibieron el test.
+`Tests completados` — cuántos lo respondieron.
+`Evaluados por IA` — cuántos tienen puntaje de IA.
+`Seleccionados` — cuántos fueron seleccionados.
+`Puntaje promedio` — promedio de score de los evaluados, o "—" si ninguno fue evaluado aún.
+
+### Hoja 2 — Pipeline de Candidatos
+
+Una fila por cada candidato que hizo match con alguna oferta de la empresa, con:
+
+`Candidato` — nombre completo.
+`Email` — email del candidato.
+`Oferta` — a qué oferta aplicó.
+`Etapa` — etapa actual del match (Matched, TestSent, TestCompleted, Selected, Rejected).
+`Puntaje IA` — puntaje del test (0–100), o "—" si no fue evaluado.
+`Feedback global IA` — resumen de la IA sobre el desempeño del candidato.
+`Test enviado el` — fecha y hora en que el candidato envió sus respuestas.
+`IA evaluó el` — fecha y hora en que la IA completó la evaluación.
+
+---
+
+---
+
 # Resultados de test de candidato (vista empresa)
 
 ## Endpoint

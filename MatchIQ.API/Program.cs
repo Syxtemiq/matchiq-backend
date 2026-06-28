@@ -21,6 +21,7 @@ using MatchIQ.Infrastructure.Email;
 using MatchIQ.Infrastructure.Payments;
 using MatchIQ.Infrastructure.Persistence;
 using MatchIQ.Infrastructure.Persistence.Repositories;
+using MatchIQ.Infrastructure.Reports;
 using MatchIQ.API.BackgroundServices;
 using MatchIQ.API.Middlewares;
 using MatchIQ.API.Services;
@@ -134,6 +135,7 @@ builder.Services.AddScoped<ITestRepository, TestRepository>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddHostedService<DailyJobsService>();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
