@@ -21,6 +21,13 @@ public class CompanyController : ControllerBase
         _currentUser = currentUser;
     }
 
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard()
+    {
+        var dashboard = await _companyService.GetDashboardAsync(_currentUser.UserId);
+        return Ok(ApiResponse.Ok(dashboard));
+    }
+
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile()
     {

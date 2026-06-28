@@ -1,3 +1,117 @@
+# Endpoints de empresa — Referencia para frontend
+
+---
+
+# Dashboard de métricas
+
+## Endpoint
+
+```
+GET /api/company/dashboard
+Authorization: Bearer <token>   (rol: Company)
+```
+
+Retorna métricas agregadas de toda la actividad de la empresa en la plataforma. No recibe parámetros.
+
+---
+
+## Respuesta exitosa
+
+```json
+{
+  "offers": {
+    "total": 10,
+    "open": 3,
+    "testSent": 2,
+    "completed": 4,
+    "cancelled": 1,
+    "expired": 0,
+    "pendingPayment": 0
+  },
+  "matches": {
+    "total": 87,
+    "testSent": 40,
+    "testCompleted": 31,
+    "selected": 8,
+    "rejected": 15,
+    "selectionRate": 20.0
+  },
+  "tests": {
+    "sent": 40,
+    "completed": 31,
+    "evaluated": 28,
+    "expired": 3,
+    "completionRate": 77.5,
+    "averageScore": 72.4
+  }
+}
+```
+
+### Bloque `offers` — estado de las ofertas
+
+`total` — Cantidad total de ofertas creadas por la empresa.
+
+`open` — Ofertas activas acumulando candidatos (pagadas, sin haber enviado el test todavía).
+
+`testSent` — Ofertas en las que ya se envió el test a los candidatos seleccionados.
+
+`completed` — Ofertas finalizadas (todas las submissions evaluadas o expiradas).
+
+`cancelled` — Ofertas canceladas manualmente.
+
+`expired` — Ofertas que vencieron por tiempo sin haber enviado el test.
+
+`pendingPayment` — Ofertas creadas pero sin pago confirmado aún.
+
+---
+
+### Bloque `matches` — candidatos
+
+`total` — Total de candidatos que hicieron match con alguna oferta de la empresa.
+
+`testSent` — Cuántos de esos candidatos recibieron el test.
+
+`testCompleted` — Cuántos completaron y enviaron el test.
+
+`selected` — Cuántos fueron seleccionados por la empresa.
+
+`rejected` — Cuántos fueron descartados.
+
+`selectionRate` — Porcentaje de candidatos seleccionados sobre el total que recibieron el test (ej: `20.0` = 20%). Es `0` si nadie recibió el test aún.
+
+---
+
+### Bloque `tests` — desempeño de los tests
+
+`sent` — Total de tests enviados a candidatos (equivale a `matches.testSent`).
+
+`completed` — Cuántos candidatos completaron y enviaron sus respuestas.
+
+`evaluated` — Cuántos de esos fueron evaluados por la IA (tienen score disponible).
+
+`expired` — Cuántos candidatos dejaron vencer el tiempo sin responder.
+
+`completionRate` — Porcentaje de candidatos que completaron el test sobre los que lo recibieron (ej: `77.5` = 77.5%). Es `0` si nadie recibió el test aún.
+
+`averageScore` — Promedio de puntaje (0–100) de todos los tests evaluados por IA. Es `null` si todavía no hay ninguno evaluado.
+
+---
+
+### Qué mostrarle a la empresa en pantalla
+
+Con este endpoint se puede construir un dashboard de inicio con:
+
+- Tarjetas de estado de ofertas: activas, enviadas, completadas, canceladas
+- Un número grande con total de candidatos y cuántos están en cada etapa del proceso
+- Tasa de completación del test como indicador de interés de los candidatos
+- Tasa de selección como indicador de calidad del proceso
+- Puntaje promedio como referencia del nivel general de los candidatos evaluados
+- Si `averageScore` es null o `evaluated` es 0, mostrar un estado vacío ("aún no hay evaluaciones")
+
+---
+
+---
+
 # Resultados de test de candidato (vista empresa)
 
 ## Endpoint
