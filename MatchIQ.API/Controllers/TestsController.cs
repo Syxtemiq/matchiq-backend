@@ -13,15 +13,18 @@ public class TestsController : ControllerBase
 {
     private readonly TestService _testService;
     private readonly TestEditorService _testEditorService;
+    private readonly ProctoringService _proctoringService;
     private readonly ICurrentUserService _currentUser;
 
     public TestsController(
         TestService testService,
         TestEditorService testEditorService,
+        ProctoringService proctoringService,
         ICurrentUserService currentUser)
     {
         _testService = testService;
         _testEditorService = testEditorService;
+        _proctoringService = proctoringService;
         _currentUser = currentUser;
     }
 
@@ -73,6 +76,14 @@ public class TestsController : ControllerBase
     {
         var detail = await _testService.GetCandidateSubmissionAsync(matchId, _currentUser.UserId);
         return Ok(ApiResponse.Ok(detail));
+    }
+
+    [HttpGet("submissions/{matchId:int}/proctoring")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetProctoringReport(int matchId)
+    {
+        var report = await _proctoringService.GetReportByMatchAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(report));
     }
 
     // ── Candidato ─────────────────────────────────────────────────────────────────

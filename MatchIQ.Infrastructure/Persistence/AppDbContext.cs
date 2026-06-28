@@ -31,6 +31,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
     public DbSet<QuestionChatMessage> QuestionChatMessages => Set<QuestionChatMessage>();
     public DbSet<TestSubmission> TestSubmissions => Set<TestSubmission>();
+    public DbSet<ProctoringSession> ProctoringSessions => Set<ProctoringSession>();
+    public DbSet<ProctoringEvent> ProctoringEvents => Set<ProctoringEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +42,7 @@ public class AppDbContext : DbContext, IAppDbContext
         ConfigurePricingAndOffers(modelBuilder);
         ConfigureMatching(modelBuilder);
         ConfigureTests(modelBuilder);
+        ConfigureProctoring(modelBuilder);
     }
 
     // =========================================================================
@@ -430,6 +433,52 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasOne(x => x.CandidateProfile)
                 .WithMany(cp => cp.Matches)
                 .HasForeignKey(x => x.CandidateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    // =========================================================================
+    // PROCTORING
+    // =========================================================================
+    private static void ConfigureProctoring(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ProctoringSession>(e =>
+        {
+            e.ToTable("proctoring_sessions");
+            e.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+            e.Property(x => x.UsuarioId).HasColumnName("usuario_id").IsRequired();
+            e.Property(x => x.SubmissionId).HasColumnName("submission_id");
+            e.Property(x => x.Inicio).HasColumnName("inicio").HasColumnType("timestamp").IsRequired();
+            e.Property(x => x.Fin).HasColumnName("fin").HasColumnType("timestamp");
+            e.Property(x => x.TotalFramesProcesados).HasColumnName("total_frames_procesados");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            e.HasIndex(x => x.SessionId).IsUnique();
+            e.HasIndex(x => x.SubmissionId).HasDatabaseName("idx_proctoring_sessions_submission");
+            e.HasIndex(x => x.UsuarioId).HasDatabaseName("idx_proctoring_sessions_usuario");
+
+            e.HasOne(x => x.Submission)
+                .WithMany()
+                .HasForeignKey(x => x.SubmissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProctoringEvent>(e =>
+        {
+            e.ToTable("proctoring_events");
+            e.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+            e.Property(x => x.Tipo).HasColumnName("tipo").IsRequired();
+            e.Property(x => x.Detalle).HasColumnName("detalle");
+            e.Property(x => x.Evidencia).HasColumnName("evidencia");
+            e.Property(x => x.Timestamp).HasColumnName("timestamp").HasColumnType("timestamp").IsRequired();
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            e.HasIndex(x => x.SessionId).HasDatabaseName("idx_proctoring_events_session");
+
+            e.HasOne(x => x.Session)
+                .WithMany(s => s.Events)
+                .HasForeignKey(x => x.SessionId)
+                .HasPrincipalKey(s => s.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -120,6 +120,7 @@ builder.Services.AddScoped<MatchingService>();
 builder.Services.AddScoped<TestService>();
 builder.Services.AddScoped<TestEditorService>();
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<ProctoringService>();
 
 builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IJwtService, JwtService>();
