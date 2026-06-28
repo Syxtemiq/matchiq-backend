@@ -49,15 +49,24 @@ public class StripeService : IPaymentService
             .FirstOrDefaultAsync(p => p.OfferId == offerId)
             ?? throw new KeyNotFoundException("Registro de pago no encontrado.");
 
-        // Idempotencia: si ya existe una sesión abierta, devolver su URL directamente
+        // Idempotencia: revisar sesión existente antes de crear una nueva
         if (!string.IsNullOrEmpty(payment.PaymentCheckoutId))
         {
             try
             {
                 var existing = await new SessionService().GetAsync(payment.PaymentCheckoutId);
+
                 if (existing.Status == "open")
                     return existing.Url;
+
+                // El pago fue completado pero verify-session nunca se llamó — activar ahora
+                if (existing.Status == "complete" && existing.PaymentStatus == "paid")
+                {
+                    await ActivatePaymentAsync(payment, existing.Id, existing.PaymentIntentId);
+                    throw new InvalidOperationException("El pago ya fue procesado. La oferta ha sido activada.");
+                }
             }
+            catch (InvalidOperationException) { throw; }
             catch { /* sesión expirada o inválida — crear una nueva */ }
 
             payment.PaymentCheckoutId = null;
@@ -137,21 +146,7 @@ public class StripeService : IPaymentService
 
         if (payment.Status == PaymentStatus.Succeeded) return;
 
-        payment.Status = PaymentStatus.Succeeded;
-        payment.PaymentTransactionId = session.PaymentIntentId;
-        payment.PaidAt = DateTime.UtcNow;
-
-        payment.JobOffer.Status   = OfferStatus.Open;
-        payment.JobOffer.PaidAt   = DateTime.UtcNow;
-        payment.JobOffer.ExpiresAt = DateTime.UtcNow.AddMonths(3);
-
-        await _context.SaveChangesAsync();
-
-        await _context.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT * FROM get_full_offer_ranking({payment.JobOffer.Id})");
-
-        _logger.LogInformation("Oferta {OfferId} activada tras pago Stripe {SessionId}.",
-            payment.JobOffer.Id, session.Id);
+        await ActivatePaymentAsync(payment, session.Id, session.PaymentIntentId);
     }
 
     public async Task<bool> VerifyAndActivateAsync(string sessionId, int userId)
@@ -188,8 +183,19 @@ public class StripeService : IPaymentService
         if (payment.Status == PaymentStatus.Succeeded)
             return true;
 
+        await ActivatePaymentAsync(payment, session.Id, session.PaymentIntentId);
+
+        _logger.LogInformation("Oferta {OfferId} activada por verificación directa de sesión {SessionId}.",
+            payment.JobOffer.Id, sessionId);
+
+        return true;
+    }
+
+    private async Task ActivatePaymentAsync(
+        Domain.Entities.Payment payment, string sessionId, string? paymentIntentId)
+    {
         payment.Status = PaymentStatus.Succeeded;
-        payment.PaymentTransactionId = session.PaymentIntentId;
+        payment.PaymentTransactionId = paymentIntentId;
         payment.PaidAt = DateTime.UtcNow;
 
         payment.JobOffer.Status    = OfferStatus.Open;
@@ -201,9 +207,7 @@ public class StripeService : IPaymentService
         await _context.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT * FROM get_full_offer_ranking({payment.JobOffer.Id})");
 
-        _logger.LogInformation("Oferta {OfferId} activada por verificación directa de sesión {SessionId}.",
+        _logger.LogInformation("Oferta {OfferId} activada. Sesión Stripe: {SessionId}.",
             payment.JobOffer.Id, sessionId);
-
-        return true;
     }
 }
