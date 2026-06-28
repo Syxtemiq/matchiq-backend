@@ -110,7 +110,7 @@ public class TestService
         };
     }
 
-    public async Task<TestDto> StartTestAsync(int offerId, int userId)
+    public async Task<StartTestResponseDto> StartTestAsync(int offerId, int userId)
     {
         var test = await _testRepository.GetByOfferIdAsync(offerId)
             ?? throw new KeyNotFoundException("Test no encontrado.");
@@ -136,7 +136,11 @@ public class TestService
             await _context.SaveChangesAsync();
         }
 
-        return MapToDto(test, includeAnswers: false);
+        return new StartTestResponseDto
+        {
+            SubmissionId = submission.Id,
+            Test         = MapToDto(test, includeAnswers: false)
+        };
     }
 
     public async Task<SubmissionResultDto> SubmitAnswersAsync(int testId, int userId, SubmitAnswersDto dto)

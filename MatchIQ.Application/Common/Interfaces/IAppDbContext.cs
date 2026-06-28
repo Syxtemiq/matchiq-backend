@@ -25,6 +25,8 @@ public interface IAppDbContext
     DbSet<TestQuestion> TestQuestions { get; }
     DbSet<QuestionChatMessage> QuestionChatMessages { get; }
     DbSet<TestSubmission> TestSubmissions { get; }
+    DbSet<ProctoringSession> ProctoringSessions { get; }
+    DbSet<ProctoringEvent> ProctoringEvents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
