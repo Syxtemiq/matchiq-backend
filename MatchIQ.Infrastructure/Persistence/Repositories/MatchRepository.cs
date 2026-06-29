@@ -35,7 +35,7 @@ public class MatchRepository : IMatchRepository
             {
                 if (existing.Stage == MatchStage.Matched)
                 {
-                    existing.MatchPercentage = raw.MatchPercentage;
+                    existing.MatchPercentage = raw.MatchPercentage ?? 0;
                     existing.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -45,7 +45,7 @@ public class MatchRepository : IMatchRepository
                 {
                     OfferId = offerId,
                     CandidateId = raw.CandidateId,
-                    MatchPercentage = raw.MatchPercentage,
+                    MatchPercentage = raw.MatchPercentage ?? 0,
                     Stage = MatchStage.Matched,
                     UpdatedAt = DateTime.UtcNow
                 });
@@ -93,6 +93,6 @@ public class MatchRepository : IMatchRepository
     private sealed class MatchResultRaw
     {
         public int CandidateId { get; init; }
-        public decimal MatchPercentage { get; init; }
+        public decimal? MatchPercentage { get; init; }
     }
 }
