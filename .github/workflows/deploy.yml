@@ -1,0 +1,58 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via Bastion
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY_BASTION }}" > ~/.ssh/bastion_key
+          echo "${{ secrets.SSH_PRIVATE_KEY_PRIVATE }}" > ~/.ssh/private_key
+          chmod 600 ~/.ssh/bastion_key
+          chmod 600 ~/.ssh/private_key
+          cat >> ~/.ssh/config <<EOF
+          Host bastion
+            HostName ${{ secrets.BASTION_HOST }}
+            User ubuntu
+            IdentityFile ~/.ssh/bastion_key
+            StrictHostKeyChecking no
+          Host private
+            HostName ${{ secrets.IP_EC2_BACK }}
+            User ubuntu
+            IdentityFile ~/.ssh/private_key
+            ProxyJump bastion
+            StrictHostKeyChecking no
+          EOF
+
+          ssh private << 'ENDSSH'
+            set -e
+
+            cd /home/ubuntu/matchiq-backend
+
+            echo "Actualizando repositorio..."
+            git pull origin main
+
+            echo "Deteniendo servicio..."
+            sudo systemctl stop matchiq
+
+            echo "Restaurando dependencias..."
+            dotnet restore
+
+            echo "Compilando..."
+            dotnet build --configuration Release
+
+            echo "Aplicando migrations..."
+            export PATH="$PATH:$HOME/.dotnet/tools"
+            dotnet ef database update --project MatchIQ.Infrastructure --startup-project MatchIQ.API
+
+            echo "Reiniciando servicio..."
+            sudo systemctl start matchiq
+
+            echo "Despliegue completado."
+          ENDSSH
