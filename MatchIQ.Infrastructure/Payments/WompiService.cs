@@ -46,7 +46,7 @@ public class WompiService : IPaymentService
         _redirectUrl = configuration["Wompi:RedirectUrl"] ?? "";
     }
 
-    public async Task<string> CreatePaymentLinkAsync(int offerId, int userId)
+    public async Task<string?> CreatePaymentLinkAsync(int offerId, int userId)
     {
         var company = await _context.CompanyProfiles
             .FirstOrDefaultAsync(c => c.UserId == userId)
