@@ -82,11 +82,14 @@ public class CompanyService
             .GroupBy(_ => 1)
             .Select(g => new
             {
-                Total         = g.Count(),
-                TestSent      = g.Count(m => m.Stage == MatchStage.TestSent),
-                TestCompleted = g.Count(m => m.Stage == MatchStage.TestCompleted),
-                Selected      = g.Count(m => m.Stage == MatchStage.Selected),
-                Rejected      = g.Count(m => m.Stage == MatchStage.Rejected),
+                Total           = g.Count(),
+                TestSent        = g.Count(m => m.Stage == MatchStage.TestSent),
+                TestCompleted   = g.Count(m => m.Stage == MatchStage.TestCompleted),
+                Selected        = g.Count(m => m.Stage == MatchStage.Selected),
+                Rejected        = g.Count(m => m.Stage == MatchStage.Rejected),
+                TotalTestsSent  = g.Count(m => m.Stage == MatchStage.TestSent
+                                            || m.Stage == MatchStage.TestCompleted
+                                            || m.Stage == MatchStage.Selected),
             })
             .FirstOrDefaultAsync();
 
@@ -107,7 +110,7 @@ public class CompanyService
             })
             .FirstOrDefaultAsync();
 
-        int matchTestSent      = matches?.TestSent ?? 0;
+        int totalTestsSent     = matches?.TotalTestsSent ?? 0;
         int matchSelected      = matches?.Selected ?? 0;
         int submissionsTotal   = submissions?.Total ?? 0;
         int submissionsEval    = submissions?.Evaluated ?? 0;
@@ -127,22 +130,22 @@ public class CompanyService
             Matches = new MatchStatsDto
             {
                 Total         = matches?.Total ?? 0,
-                TestSent      = matchTestSent,
+                TestSent      = matches?.TestSent ?? 0,
                 TestCompleted = matches?.TestCompleted ?? 0,
                 Selected      = matchSelected,
                 Rejected      = matches?.Rejected ?? 0,
-                SelectionRate = matchTestSent > 0
-                    ? Math.Round((double)matchSelected / matchTestSent * 100, 1)
+                SelectionRate = totalTestsSent > 0
+                    ? Math.Round((double)matchSelected / totalTestsSent * 100, 1)
                     : 0,
             },
             Tests = new TestStatsDto
             {
-                Sent           = matchTestSent,
+                Sent           = totalTestsSent,
                 Completed      = submissionsTotal,
                 Evaluated      = submissionsEval,
                 Expired        = submissions?.Expired ?? 0,
-                CompletionRate = matchTestSent > 0
-                    ? Math.Round((double)submissionsTotal / matchTestSent * 100, 1)
+                CompletionRate = totalTestsSent > 0
+                    ? Math.Round((double)submissionsTotal / totalTestsSent * 100, 1)
                     : 0,
                 AverageScore   = submissions?.AvgScore.HasValue == true
                     ? Math.Round(submissions.AvgScore.Value, 1)
