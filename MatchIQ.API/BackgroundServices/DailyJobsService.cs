@@ -1,3 +1,4 @@
+using MatchIQ.Application.Modules.Tests;
 using MatchIQ.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,8 @@ public class DailyJobsService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await RunJobsAsync(stoppingToken);
+
         using var timer = new PeriodicTimer(_interval);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
@@ -52,6 +55,17 @@ public class DailyJobsService : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error al ejecutar expire_stale_submissions.");
+        }
+
+        try
+        {
+            var testService = scope.ServiceProvider.GetRequiredService<TestService>();
+            await testService.RetryPendingEvaluationsAsync();
+            _logger.LogInformation("RetryPendingEvaluations ejecutado.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al ejecutar RetryPendingEvaluations.");
         }
     }
 }

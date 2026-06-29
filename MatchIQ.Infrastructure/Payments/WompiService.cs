@@ -102,7 +102,10 @@ public class WompiService : IPaymentService
         return $"https://checkout.wompi.co/l/{wompiResponse.Data.Id}";
     }
 
-    public async Task ProcessWebhookAsync(string rawBody)
+    public Task<bool> VerifyAndActivateAsync(string sessionId, int userId) =>
+        throw new NotSupportedException("Wompi no está en uso.");
+
+    public async Task ProcessWebhookAsync(string rawBody, string? signature = null)
     {
         WompiWebhookPayload payload;
         try

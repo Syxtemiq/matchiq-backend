@@ -18,7 +18,8 @@ public class OpenAIService : IAIService
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
     public OpenAIService(IOpenAIService openAI, IConfiguration configuration)
@@ -107,6 +108,33 @@ public class OpenAIService : IAIService
             Strengths = raw.Strengths ?? [],
             Opportunities = raw.Opportunities ?? [],
             Recommendation = raw.Recommendation ?? string.Empty
+        };
+    }
+
+    public async Task<ProctoringAnalysisDto> AnalyzeProctoringAsync(IEnumerable<ProctoringEvent> events, decimal integrityScore)
+    {
+        var prompt = ProctoringAnalysisPrompt.Build(events, integrityScore);
+
+        var completion = await _openAI.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
+        {
+            Messages =
+            [
+                ChatMessage.FromSystem("Eres un auditor de integridad. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional."),
+                ChatMessage.FromUser(prompt)
+            ],
+            Model = _model,
+            MaxTokens = 400,
+            Temperature = 0.3f
+        });
+
+        var json = ExtractJson(completion, "AnalyzeProctoringAsync");
+
+        var raw = JsonSerializer.Deserialize<ProctoringAnalysisRaw>(json, _jsonOptions)
+            ?? throw new InvalidOperationException("La IA devolvió un JSON vacío al analizar el proctoring.");
+
+        return new ProctoringAnalysisDto
+        {
+            Summary = raw.Summary ?? string.Empty
         };
     }
 
@@ -237,5 +265,10 @@ public class OpenAIService : IAIService
         public int QuestionId { get; set; }
         public bool IsCorrect { get; set; }
         public string? Feedback { get; set; }
+    }
+
+    private sealed class ProctoringAnalysisRaw
+    {
+        public string? Summary { get; set; }
     }
 }

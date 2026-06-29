@@ -22,15 +22,24 @@ public class MatchRepository : IMatchRepository
     {
         var rawResults = await _context.Database
             .SqlQuery<MatchResultRaw>(
-                $"SELECT candidate_id AS \"CandidateId\", match_percentage AS \"MatchPercentage\" FROM get_candidate_matches({offerId})")
+                $"SELECT candidate_id, final_match_percentage AS match_percentage FROM get_candidate_matches({offerId})")
             .ToListAsync();
+
+        var existingMatches = await _context.Matches
+            .Where(m => m.OfferId == offerId)
+            .ToDictionaryAsync(m => m.CandidateId);
 
         foreach (var raw in rawResults)
         {
-            var existing = await _context.Matches
-                .FirstOrDefaultAsync(m => m.OfferId == offerId && m.CandidateId == raw.CandidateId);
-
-            if (existing is null)
+            if (existingMatches.TryGetValue(raw.CandidateId, out var existing))
+            {
+                if (existing.Stage == MatchStage.Matched)
+                {
+                    existing.MatchPercentage = raw.MatchPercentage;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            else
             {
                 _context.Matches.Add(new Match
                 {
@@ -40,11 +49,6 @@ public class MatchRepository : IMatchRepository
                     Stage = MatchStage.Matched,
                     UpdatedAt = DateTime.UtcNow
                 });
-            }
-            else if (existing.Stage == MatchStage.Matched)
-            {
-                existing.MatchPercentage = raw.MatchPercentage;
-                existing.UpdatedAt = DateTime.UtcNow;
             }
         }
 
@@ -60,6 +64,9 @@ public class MatchRepository : IMatchRepository
             .Include(m => m.CandidateProfile)
                 .ThenInclude(cp => cp.CandidateSkills)
                     .ThenInclude(cs => cs.Skill)
+            .Include(m => m.CandidateProfile)
+                .ThenInclude(cp => cp.CandidateCategories)
+                    .ThenInclude(cc => cc.Category)
             .Where(m => m.OfferId == offerId)
             .OrderByDescending(m => m.AdjustedScore ?? m.MatchPercentage)
             .ToListAsync();

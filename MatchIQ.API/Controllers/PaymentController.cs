@@ -33,25 +33,39 @@ public class PaymentController : ControllerBase
         return Ok(ApiResponse.Ok(new { url }));
     }
 
+    [Authorize(Roles = "Company")]
+    [HttpPost("verify-session")]
+    public async Task<IActionResult> VerifySession([FromQuery] string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return BadRequest(ApiResponse.Fail("sessionId es requerido."));
+
+        var activated = await _paymentService.VerifyAndActivateAsync(sessionId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(new { activated }, activated
+            ? "Pago verificado. Oferta activada."
+            : "El pago aún no ha sido procesado."));
+    }
+
     [AllowAnonymous]
     [HttpPost("webhook")]
     public async Task<IActionResult> Webhook()
     {
         using var reader = new StreamReader(Request.Body);
         var rawBody = await reader.ReadToEndAsync();
+        var signature = Request.Headers["Stripe-Signature"].FirstOrDefault();
 
         try
         {
-            await _paymentService.ProcessWebhookAsync(rawBody);
+            await _paymentService.ProcessWebhookAsync(rawBody, signature);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("Firma"))
         {
-            _logger.LogWarning("Webhook Wompi rechazado: {Reason}", ex.Message);
+            _logger.LogWarning("Webhook rechazado por firma inválida: {Reason}", ex.Message);
             return BadRequest(ApiResponse.Fail(ex.Message));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error procesando webhook de Wompi.");
+            _logger.LogError(ex, "Error procesando webhook de pago.");
         }
 
         return Ok(ApiResponse.Ok());

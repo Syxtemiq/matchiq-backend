@@ -1,9 +1,11 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
-using MatchIQ.Domain.Enums;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using Npgsql;
-using Npgsql.NameTranslation;
 using MatchIQ.Application.Modules.Admin;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
@@ -19,6 +21,7 @@ using MatchIQ.Infrastructure.Email;
 using MatchIQ.Infrastructure.Payments;
 using MatchIQ.Infrastructure.Persistence;
 using MatchIQ.Infrastructure.Persistence.Repositories;
+using MatchIQ.Infrastructure.Reports;
 using MatchIQ.API.BackgroundServices;
 using MatchIQ.API.Middlewares;
 using MatchIQ.API.Services;
@@ -31,26 +34,16 @@ using OpenAI.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Base de datos ─────────────────────────────────────────────────────────────
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true); 
+
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(
     builder.Configuration.GetConnectionString("DefaultConnection")!);
-
-// Mapeo de enums de PostgreSQL — sin esto EF Core envía text y PostgreSQL rechaza el cast
-dataSourceBuilder.MapEnum<UserRole>("user_role_enum");
-dataSourceBuilder.MapEnum<Seniority>("seniority_enum");
-dataSourceBuilder.MapEnum<Modality>("modality_enum");
-dataSourceBuilder.MapEnum<OfferStatus>("offer_status_enum");
-dataSourceBuilder.MapEnum<MatchStage>("match_stage_enum");
-dataSourceBuilder.MapEnum<SubmissionStatus>("submission_status_enum");
-dataSourceBuilder.MapEnum<PaymentStatus>("payment_status_enum");
-dataSourceBuilder.MapEnum<QuestionType>("question_type_enum");
-dataSourceBuilder.MapEnum<ChatRole>("chat_role_enum");
-// EnglishLevel usa labels en mayúsculas ('A1','A2'...) — se preserva el nombre C# tal cual
-dataSourceBuilder.MapEnum<EnglishLevel>("english_level_enum", new NpgsqlNullNameTranslator());
 
 var npgsqlDataSource = dataSourceBuilder.Build();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(npgsqlDataSource));
+    options.UseNpgsql(npgsqlDataSource)
+           .UseSnakeCaseNamingConvention());
 
 // ── Autenticación JWT ─────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -76,7 +69,6 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-    // Login, register, forgot-password, reset-password: 5 intentos/min por IP
     options.AddPolicy("auth-strict", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -88,7 +80,6 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
-    // Verify-email, refresh, google-login: 15 intentos/min por IP
     options.AddPolicy("auth-general", context =>
     {
         var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
@@ -100,7 +91,6 @@ builder.Services.AddRateLimiter(options =>
         });
     });
 
-    // Pagos: 5 intentos/5min por usuario autenticado (o IP si no hay token)
     options.AddPolicy("payment", context =>
     {
         var key = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
@@ -122,7 +112,6 @@ builder.Services.AddOpenAIService(settings =>
 });
 
 // ── Inyección de dependencias ─────────────────────────────────────────────────
-// Application Services
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CandidateService>();
 builder.Services.AddScoped<CompanyService>();
@@ -131,8 +120,8 @@ builder.Services.AddScoped<MatchingService>();
 builder.Services.AddScoped<TestService>();
 builder.Services.AddScoped<TestEditorService>();
 builder.Services.AddScoped<AdminService>();
+builder.Services.AddScoped<ProctoringService>();
 
-// Infrastructure Services
 builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -140,20 +129,17 @@ builder.Services.AddScoped<IAIService, OpenAIService>();
 builder.Services.AddScoped<IOfferParserService, OfferParserService>();
 builder.Services.AddScoped<IEmailService, MailKitEmailService>();
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
-builder.Services.AddHttpClient<IPaymentService, WompiService>();
+builder.Services.AddScoped<IPaymentService, StripeService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<IMatchRepository, MatchRepository>();
 builder.Services.AddScoped<ITestRepository, TestRepository>();
 
-// Current user (lectura de claims del JWT via IHttpContextAccessor)
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-
-// Background jobs diarios
+builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddHostedService<DailyJobsService>();
 
-// ── CORS para Flutter Web ─────────────────────────────────────────────────────
-// TODO: configurar origins reales cuando se tenga la URL del frontend
+// ── CORS ──────────────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FlutterWeb", policy =>
@@ -178,16 +164,10 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Ingresa el token JWT. Ejemplo: Bearer {token}"
+        Description = "Pega solo el token JWT (sin 'Bearer '). Swagger lo agrega automáticamente."
     });
 
-    options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecuritySchemeReference("Bearer", doc),
-            []
-        }
-    });
+    options.OperationFilter<BearerAuthOperationFilter>();
 });
 
 builder.Services.AddControllers()
@@ -197,8 +177,6 @@ builder.Services.AddControllers()
     })
     .ConfigureApiBehaviorOptions(options =>
     {
-        // Unifica los errores de validación de DTOs con el mismo ApiResponse<T>
-        // que usa el resto de la API — sin esto, [ApiController] devolvería ProblemDetails
         options.InvalidModelStateResponseFactory = context =>
         {
             var firstError = context.ModelState
@@ -220,15 +198,12 @@ var app = builder.Build();
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
-        options.RoutePrefix = string.Empty;
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "MatchIQ API v1");
+    options.RoutePrefix = string.Empty;
+});
 
 app.UseCors("FlutterWeb");
 app.UseRateLimiter();
@@ -237,3 +212,26 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Añade el candado 🔒 solo a endpoints con [Authorize], respetando [AllowAnonymous]
+public class BearerAuthOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var hasAuthorize =
+            context.MethodInfo.DeclaringType!.GetCustomAttributes<AuthorizeAttribute>(true).Any()
+            || context.MethodInfo.GetCustomAttributes<AuthorizeAttribute>(true).Any();
+
+        var hasAllowAnonymous =
+            context.MethodInfo.GetCustomAttributes<AllowAnonymousAttribute>(true).Any();
+
+        if (!hasAuthorize || hasAllowAnonymous) return;
+
+        operation.Security = [
+            new OpenApiSecurityRequirement
+            {
+                { new OpenApiSecuritySchemeReference("Bearer"), [] }
+            }
+        ];
+    }
+}

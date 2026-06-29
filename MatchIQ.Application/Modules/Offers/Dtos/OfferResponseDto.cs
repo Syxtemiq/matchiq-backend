@@ -16,6 +16,7 @@ public class OfferResponseDto
     public string TierName { get; set; } = string.Empty;
     public decimal TierPriceCop { get; set; }
     public int? CandidatesToTest { get; set; }
+    public int TestDeadlineDays { get; set; }
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public DateTime? PaidAt { get; set; }

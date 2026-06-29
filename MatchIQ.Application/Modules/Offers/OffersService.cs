@@ -90,6 +90,7 @@ public class OffersService
             PositionsAvailable = dto.PositionsAvailable,
             TierId = dto.TierId,
             CandidatesToTest = tier.MaxCandidates,
+            TestDeadlineDays = dto.TestDeadlineDays,
             Status = OfferStatus.PendingPayment
         };
 
@@ -159,8 +160,8 @@ public class OffersService
         if (offer.CompanyId != company.Id)
             throw new UnauthorizedAccessException("No tienes acceso a esta oferta.");
 
-        if (offer.Status != OfferStatus.Open)
-            throw new InvalidOperationException("Solo se pueden editar ofertas en estado Open.");
+        if (offer.Status != OfferStatus.PendingPayment)
+            throw new InvalidOperationException("La oferta no puede ser modificada una vez que ha sido activada.");
 
         if (dto.Title is not null)
         {
@@ -284,6 +285,7 @@ public class OffersService
         TierName = offer.PricingTier.Name,
         TierPriceCop = offer.PricingTier.PriceCop,
         CandidatesToTest = offer.CandidatesToTest,
+        TestDeadlineDays = offer.TestDeadlineDays,
         Status = offer.Status.ToString(),
         CreatedAt = offer.CreatedAt,
         PaidAt = offer.PaidAt,

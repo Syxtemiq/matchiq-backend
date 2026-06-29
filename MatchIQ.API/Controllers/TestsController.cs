@@ -13,15 +13,18 @@ public class TestsController : ControllerBase
 {
     private readonly TestService _testService;
     private readonly TestEditorService _testEditorService;
+    private readonly ProctoringService _proctoringService;
     private readonly ICurrentUserService _currentUser;
 
     public TestsController(
         TestService testService,
         TestEditorService testEditorService,
+        ProctoringService proctoringService,
         ICurrentUserService currentUser)
     {
         _testService = testService;
         _testEditorService = testEditorService;
+        _proctoringService = proctoringService;
         _currentUser = currentUser;
     }
 
@@ -29,17 +32,17 @@ public class TestsController : ControllerBase
 
     [HttpPost("{offerId:int}/generate")]
     [Authorize(Roles = "Company")]
-    public async Task<IActionResult> GenerateTest(int offerId)
+    public async Task<IActionResult> GenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
     {
-        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId);
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes);
         return Ok(ApiResponse.Ok(test, "Test generado correctamente."));
     }
 
     [HttpPost("{offerId:int}/regenerate")]
     [Authorize(Roles = "Company")]
-    public async Task<IActionResult> RegenerateTest(int offerId)
+    public async Task<IActionResult> RegenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
     {
-        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, forceRegenerate: true);
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes, forceRegenerate: true);
         return Ok(ApiResponse.Ok(test, "Test regenerado correctamente."));
     }
 
@@ -67,7 +70,31 @@ public class TestsController : ControllerBase
         return Ok(ApiResponse.Ok(result));
     }
 
+    [HttpGet("submissions/{matchId:int}")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetCandidateSubmission(int matchId)
+    {
+        var detail = await _testService.GetCandidateSubmissionAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(detail));
+    }
+
+    [HttpGet("submissions/{matchId:int}/proctoring")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetProctoringReport(int matchId)
+    {
+        var report = await _proctoringService.GetReportByMatchAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(report));
+    }
+
     // ── Candidato ─────────────────────────────────────────────────────────────────
+
+    [HttpGet("candidate")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> GetMyTests()
+    {
+        var tests = await _testService.GetMyTestsAsync(_currentUser.UserId);
+        return Ok(ApiResponse.Ok(tests));
+    }
 
     [HttpGet("{offerId:int}/candidate/preview")]
     [Authorize(Roles = "Candidate")]

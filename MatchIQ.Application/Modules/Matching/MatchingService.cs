@@ -65,7 +65,7 @@ public class MatchingService
             try
             {
                 var insight = await _aiService.EvaluateCandidateAsync(offer, match);
-                var raw = 0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100;
+                var raw = 0.9m * (match.MatchPercentage ?? 0) + insight.FitScore;
 
                 var dbMatch = await _context.Matches.FindAsync(match.Id);
                 if (dbMatch is null) continue;
@@ -137,7 +137,7 @@ public class MatchingService
                 $"El tier de esta oferta permite máximo {offer.CandidatesToTest} candidatos con test. " +
                 $"Ya tienes {alreadySent} y estás intentando agregar {matches.Count} más.");
 
-        var deadline = DateTime.UtcNow.AddHours(72);
+        var deadline = DateTime.UtcNow.AddDays(offer.TestDeadlineDays);
 
         foreach (var match in matches)
         {
@@ -213,6 +213,7 @@ public class MatchingService
         var allMatches = await _context.Matches
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.User)
             .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateSkills).ThenInclude(cs => cs.Skill)
+            .Include(m => m.CandidateProfile).ThenInclude(cp => cp.CandidateCategories).ThenInclude(cc => cc.Category)
             .Where(m => m.OfferId == offerId)
             .ToListAsync();
 
@@ -226,7 +227,7 @@ public class MatchingService
                 if (insight is not null)
                 {
                     match.AdjustedScore = Math.Min(100,
-                        0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                        0.9m * (match.MatchPercentage ?? 0) + insight.FitScore);
                     match.UpdatedAt = DateTime.UtcNow;
                 }
             }
@@ -246,7 +247,7 @@ public class MatchingService
             {
                 var insight = await _aiService.EvaluateCandidateAsync(offer, match);
                 match.AdjustedScore = Math.Min(100,
-                    0.9m * (match.MatchPercentage ?? 0) + 0.1m * insight.FitScore * 100);
+                    0.9m * (match.MatchPercentage ?? 0) + insight.FitScore);
                 match.AiFeedback = JsonSerializer.Serialize(insight);
                 match.UpdatedAt = DateTime.UtcNow;
             }
@@ -344,7 +345,17 @@ public class MatchingService
         catch { /* best-effort: la selección ya se guardó */ }
 
         var offerSkillIds = match.JobOffer.OfferSkills.Select(os => os.SkillId).ToHashSet();
-        return MapToDto(match, offerSkillIds);
+
+        var testId = await _context.Tests
+            .Where(t => t.OfferId == match.OfferId)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+
+        TestSubmission? submission = testId == 0 ? null
+            : await _context.TestSubmissions
+                .FirstOrDefaultAsync(s => s.TestId == testId && s.CandidateId == match.CandidateId);
+
+        return MapToDto(match, offerSkillIds, submission);
     }
 
     // ── Helpers privados ─────────────────────────────────────────────────────────
@@ -377,15 +388,41 @@ public class MatchingService
             .OrderByDescending(m => m.AdjustedScore ?? m.MatchPercentage)
             .ToListAsync();
 
-        return matches.Select(m => MapToDto(m, offerSkillIds)).ToList();
+        var testId = await _context.Tests
+            .Where(t => t.OfferId == offerId)
+            .Select(t => t.Id)
+            .FirstOrDefaultAsync();
+
+        var submissionsByCandidateId = testId == 0
+            ? []
+            : await _context.TestSubmissions
+                .Where(s => s.TestId == testId && s.Status == SubmissionStatus.Evaluated)
+                .ToDictionaryAsync(s => s.CandidateId);
+
+        return matches.Select(m =>
+        {
+            submissionsByCandidateId.TryGetValue(m.CandidateId, out var submission);
+            return MapToDto(m, offerSkillIds, submission);
+        }).ToList();
     }
 
-    private static MatchResultDto MapToDto(Match match, HashSet<int> offerSkillIds)
+    private static MatchResultDto MapToDto(Match match, HashSet<int> offerSkillIds, TestSubmission? submission = null)
     {
         CandidateInsightDto? insight = null;
         if (match.AiFeedback is not null)
         {
             try { insight = JsonSerializer.Deserialize<CandidateInsightDto>(match.AiFeedback); }
+            catch { /* ignore parse errors */ }
+        }
+
+        string? testFeedback = null;
+        if (submission?.Feedback is not null)
+        {
+            try
+            {
+                var eval = JsonSerializer.Deserialize<SubmissionEvaluationDto>(submission.Feedback);
+                testFeedback = eval?.Feedback;
+            }
             catch { /* ignore parse errors */ }
         }
 
@@ -399,7 +436,7 @@ public class MatchingService
             MatchId = match.Id,
             CandidateId = match.CandidateId,
             FullName = match.CandidateProfile.User.FullName ?? string.Empty,
-            Email = match.CandidateProfile.User.Email,
+            Email = match.Stage == MatchStage.Selected ? match.CandidateProfile.User.Email : null,
             ExperienceYears = match.CandidateProfile.ExperienceYears,
             EnglishLevel = match.CandidateProfile.EnglishLevel?.ToString(),
             MatchPercentage = match.MatchPercentage,
@@ -410,7 +447,9 @@ public class MatchingService
             AiOpportunities = insight?.Opportunities ?? [],
             AiRecommendation = insight?.Recommendation,
             MatchedSkills = matchedSkills,
-            CreatedAt = match.CreatedAt
+            CreatedAt = match.CreatedAt,
+            TestScore = submission?.Score,
+            TestFeedback = testFeedback
         };
     }
 }

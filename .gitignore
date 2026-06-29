@@ -23,3 +23,6 @@ projectContext.md
 
 ## Logs
 *.log
+
+## SQL migration scripts (ejecutar manualmente en DBeaver)
+*.sql

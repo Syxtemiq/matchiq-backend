@@ -28,8 +28,17 @@ public class PasswordHasher : IPasswordHasher
         var parts = hash.Split('.');
         if (parts.Length != 2) return false;
 
-        var salt = Convert.FromBase64String(parts[0]);
-        var expectedHash = Convert.FromBase64String(parts[1]);
+        byte[] salt, expectedHash;
+        try
+        {
+            salt         = Convert.FromBase64String(parts[0]);
+            expectedHash = Convert.FromBase64String(parts[1]);
+        }
+        catch (FormatException)
+        {
+            // Hash almacenado con un formato incompatible (ej: BCrypt, seed vieja).
+            return false;
+        }
 
         var actualHash = Rfc2898DeriveBytes.Pbkdf2(
             Encoding.UTF8.GetBytes(password),
