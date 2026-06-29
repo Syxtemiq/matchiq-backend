@@ -31,7 +31,7 @@ public class StripeService : IPaymentService
         _cancelUrl  = configuration["Stripe:CancelUrl"]  ?? configuration["App:FrontendUrl"] ?? "http://localhost:3000";
     }
 
-    public async Task<string> CreatePaymentLinkAsync(int offerId, int userId)
+    public async Task<string?> CreatePaymentLinkAsync(int offerId, int userId)
     {
         var company = await _context.CompanyProfiles
             .FirstOrDefaultAsync(c => c.UserId == userId)
@@ -46,6 +46,7 @@ public class StripeService : IPaymentService
             throw new InvalidOperationException("La oferta no está pendiente de pago.");
 
         var payment = await _context.Payments
+            .Include(p => p.JobOffer)
             .FirstOrDefaultAsync(p => p.OfferId == offerId);
 
         // Si no existe el pago (datos de prueba creados durante período de bugs), crearlo ahora
@@ -60,28 +61,30 @@ public class StripeService : IPaymentService
             };
             _context.Payments.Add(payment);
             await _context.SaveChangesAsync();
+
+            // Recargar con JobOffer incluido tras el insert
+            payment = (await _context.Payments
+                .Include(p => p.JobOffer)
+                .FirstOrDefaultAsync(p => p.OfferId == offerId))!;
         }
 
         // Idempotencia: revisar sesión existente antes de crear una nueva
         if (!string.IsNullOrEmpty(payment.PaymentCheckoutId))
         {
-            try
+            var existing = await new SessionService().GetAsync(payment.PaymentCheckoutId);
+
+            if (existing.Status == "open")
+                return existing.Url;
+
+            // El pago fue completado pero verify-session nunca se llamó — activar ahora
+            if (existing.Status == "complete" && existing.PaymentStatus == "paid")
             {
-                var existing = await new SessionService().GetAsync(payment.PaymentCheckoutId);
-
-                if (existing.Status == "open")
-                    return existing.Url;
-
-                // El pago fue completado pero verify-session nunca se llamó — activar ahora
-                if (existing.Status == "complete" && existing.PaymentStatus == "paid")
-                {
+                if (payment.Status != PaymentStatus.Succeeded)
                     await ActivatePaymentAsync(payment, existing.Id, existing.PaymentIntentId);
-                    throw new InvalidOperationException("El pago ya fue procesado. La oferta ha sido activada.");
-                }
+                return string.Empty;
             }
-            catch (InvalidOperationException) { throw; }
-            catch { /* sesión expirada o inválida — crear una nueva */ }
 
+            // Sesión expirada o en estado no recuperable — crear una nueva
             payment.PaymentCheckoutId = null;
         }
 

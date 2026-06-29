@@ -30,6 +30,11 @@ public class PaymentController : ControllerBase
     public async Task<IActionResult> CreateCheckout([FromQuery] int offerId)
     {
         var url = await _paymentService.CreatePaymentLinkAsync(offerId, _currentUser.UserId);
+
+        if (string.IsNullOrEmpty(url))
+            return Ok(ApiResponse.Ok(new { url = (string?)null, activated = true },
+                "El pago ya fue procesado. La oferta ha sido activada."));
+
         return Ok(ApiResponse.Ok(new { url }));
     }
 
