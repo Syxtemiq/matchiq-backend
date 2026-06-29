@@ -7,6 +7,7 @@ using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Npgsql;
 using MatchIQ.Application.Modules.Admin;
+using MatchIQ.Application.Modules.Analytics;
 using MatchIQ.Application.Modules.Auth;
 using MatchIQ.Application.Modules.Candidate;
 using MatchIQ.Application.Modules.Company;
@@ -121,6 +122,7 @@ builder.Services.AddScoped<TestService>();
 builder.Services.AddScoped<TestEditorService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<ProctoringService>();
+builder.Services.AddScoped<MarketService>();
 
 builder.Services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IJwtService, JwtService>();
