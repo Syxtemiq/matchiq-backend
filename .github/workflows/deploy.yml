@@ -33,26 +33,22 @@ jobs:
           ssh private << 'ENDSSH'
             set -e
 
-            cd /home/ubuntu/matchiq-backend
-
-            echo "Actualizando repositorio..."
-            git pull origin main
-
-            echo "Deteniendo servicio..."
-            sudo systemctl stop matchiq
-
-            echo "Restaurando dependencias..."
-            dotnet restore
-
-            echo "Compilando..."
-            dotnet build --configuration Release
-
-            echo "Aplicando migrations..."
-            export PATH="$PATH:$HOME/.dotnet/tools"
-            dotnet ef database update --project MatchIQ.Infrastructure --startup-project MatchIQ.API
-
-            echo "Reiniciando servicio..."
-            sudo systemctl start matchiq
-
-            echo "Despliegue completado."
+          cd /home/ubuntu/matchiq-backend
+          
+          echo "Actualizando repositorio..."
+          git pull origin main
+          
+          echo "Deteniendo servicio..."
+          sudo systemctl stop matchiq
+          
+          echo "Restaurando dependencias..."
+          dotnet restore
+          
+          echo "Compilando..."
+          dotnet build --configuration Release
+          
+          echo "Reiniciando servicio..."
+          sudo systemctl start matchiq
+          
+          echo "Despliegue completado."
           ENDSSH
