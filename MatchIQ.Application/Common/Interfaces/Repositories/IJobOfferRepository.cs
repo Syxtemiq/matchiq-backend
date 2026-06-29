@@ -1,9 +1,7 @@
 using MatchIQ.Domain.Entities;
 
-namespace MatchIQ.Domain.Interfaces.Repositories;
+namespace MatchIQ.Application.Common.Interfaces.Repositories;
 
-// Contrato de acceso a datos para ofertas
-// Las implementaciones concretas usan EF Core + LINQ en Infrastructure
 public interface IJobOfferRepository
 {
     Task<JobOffer?> GetByIdAsync(int id);

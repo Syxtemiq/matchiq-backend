@@ -1,7 +1,30 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MatchIQ.Application.Modules.Auth.Dtos;
 
-// Datos para registrar un nuevo usuario
 public class RegisterDto
 {
-    // TODO: Email, Password, Role (candidate | company)
+    [Required]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    public string Cedula { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$",
+        ErrorMessage = "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial.")]
+    public string Password { get; set; } = string.Empty;
+
+    [Required]
+    [Compare("Password", ErrorMessage = "Las contraseñas no coinciden.")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression(@"(?i)^(Candidate|Company)$",
+        ErrorMessage = "El rol debe ser 'Candidate' o 'Company'.")]
+    public string Role { get; set; } = string.Empty;
 }

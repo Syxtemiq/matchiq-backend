@@ -9,8 +9,8 @@ public class Payment
     public int Id { get; set; }
     public int OfferId { get; set; }
     public int TierId { get; set; }
-    public string? StripePaymentIntentId { get; set; }
-    public string? StripeCheckoutSessionId { get; set; }
+    public string? PaymentTransactionId { get; set; }
+    public string? PaymentCheckoutId { get; set; }
     public decimal AmountCop { get; set; }
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
     public DateTime? PaidAt { get; set; }

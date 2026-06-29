@@ -24,6 +24,7 @@ public class JobOffer
     public int? CandidatesToTest { get; set; }
     public int CandidatesTestedCount { get; set; }
 
+    public int TestDeadlineDays { get; set; } = 3;
     public OfferStatus Status { get; set; } = OfferStatus.PendingPayment;
     public DateTime CreatedAt { get; set; }
     public DateTime? PaidAt { get; set; }

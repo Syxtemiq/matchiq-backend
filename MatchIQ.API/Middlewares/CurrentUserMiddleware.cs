@@ -1,12 +1,14 @@
+// Este middleware no es necesario con el patrón IHttpContextAccessor.
+// La extracción de claims del JWT la hace CurrentUserService directamente.
+// El archivo se conserva por si se requiere lógica adicional por request en el futuro.
+
 namespace MatchIQ.API.Middlewares;
 
-// Middleware que extrae el userId y role del JWT y los expone como servicio
-// Los servicios de Application lo inyectan para saber qué usuario está activo
-// Equivalente a leer req.user en el middleware de auth de Express
 public class CurrentUserMiddleware
 {
-    // TODO: constructor con RequestDelegate next
-    // TODO: InvokeAsync(HttpContext context)
-    //       lee los claims del JWT (sub → userId, role → UserRole)
-    //       los guarda en ICurrentUserService para que lo inyecten los services
+    private readonly RequestDelegate _next;
+
+    public CurrentUserMiddleware(RequestDelegate next) => _next = next;
+
+    public Task InvokeAsync(HttpContext context) => _next(context);
 }

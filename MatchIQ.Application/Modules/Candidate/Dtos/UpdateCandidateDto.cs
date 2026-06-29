@@ -1,8 +1,21 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace MatchIQ.Application.Modules.Candidate.Dtos;
 
-// Datos para actualizar el perfil del candidato
 public class UpdateCandidateDto
 {
-    // TODO: ExperienceYears, Seniority, EnglishLevel, GithubLink
-    // TODO: CategoryIds (int[]), SkillIds con nivel (lista de SkillLevelDto)
+    [Range(0, int.MaxValue, ErrorMessage = "Los años de experiencia no pueden ser negativos.")]
+    public int? ExperienceYears { get; set; }
+
+    [RegularExpression(@"(?i)^(junior|mid|senior)$", ErrorMessage = "El seniority debe ser junior, mid o senior.")]
+    public string? Seniority { get; set; }
+
+    [RegularExpression(@"(?i)^(A1|A2|B1|B2|C1|C2)$", ErrorMessage = "El nivel de inglés debe ser A1, A2, B1, B2, C1 o C2.")]
+    public string? EnglishLevel { get; set; }
+
+    public string? GithubLink { get; set; }
+    public string? LinkedinUrl { get; set; }
+    public string? ProfilePhotoUrl { get; set; }
+    public List<int> CategoryIds { get; set; } = [];
+    public List<SkillLevelDto> Skills { get; set; } = [];
 }

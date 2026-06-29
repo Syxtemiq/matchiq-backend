@@ -1,13 +1,11 @@
+using MatchIQ.Application.Common.Interfaces;
 using MatchIQ.Domain.Entities;
+using MatchIQ.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatchIQ.Infrastructure.Persistence;
 
-// DbContext principal de la aplicación
-// Configura todas las entidades, relaciones, enums y constraints
-// Los enums se guardan como strings en Postgres (HasConversion<string>)
-// El mapeo de tablas/columnas en snake_case y las constraints siguen 1 a 1 a DBContext.md
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IAppDbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -33,6 +31,8 @@ public class AppDbContext : DbContext
     public DbSet<TestQuestion> TestQuestions => Set<TestQuestion>();
     public DbSet<QuestionChatMessage> QuestionChatMessages => Set<QuestionChatMessage>();
     public DbSet<TestSubmission> TestSubmissions => Set<TestSubmission>();
+    public DbSet<ProctoringSession> ProctoringSessions => Set<ProctoringSession>();
+    public DbSet<ProctoringEvent> ProctoringEvents => Set<ProctoringEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +42,7 @@ public class AppDbContext : DbContext
         ConfigurePricingAndOffers(modelBuilder);
         ConfigureMatching(modelBuilder);
         ConfigureTests(modelBuilder);
+        ConfigureProctoring(modelBuilder);
     }
 
     // =========================================================================
@@ -52,15 +53,24 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>(e =>
         {
             e.ToTable("users");
+            e.Property(x => x.Id).HasColumnName("id");
             e.Property(x => x.Email).HasColumnName("email").HasMaxLength(255).IsRequired();
+            e.Property(x => x.FullName).HasColumnName("full_name").HasMaxLength(255);
+            e.Property(x => x.Cedula).HasColumnName("cedula").HasMaxLength(20);
             e.Property(x => x.PasswordHash).HasColumnName("password_hash");
-            e.Property(x => x.Role).HasColumnName("role").HasConversion<string>().IsRequired();
+            e.Property(x => x.Role)
+                .HasColumnName("role")
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
             e.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+            e.Property(x => x.EmailVerified).HasColumnName("email_verified").HasDefaultValue(false);
             e.Property(x => x.GoogleId).HasColumnName("google_id").HasMaxLength(255);
             e.Property(x => x.PictureUrl).HasColumnName("picture_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.Email).IsUnique();
+            e.HasIndex(x => x.Cedula).IsUnique().HasFilter("cedula IS NOT NULL");
             e.HasIndex(x => x.GoogleId).IsUnique().HasFilter("google_id IS NOT NULL");
         });
 
@@ -126,9 +136,16 @@ public class AppDbContext : DbContext
             e.ToTable("candidate_profiles");
             e.Property(x => x.UserId).HasColumnName("user_id").IsRequired();
             e.Property(x => x.ExperienceYears).HasColumnName("experience_years");
-            e.Property(x => x.Seniority).HasColumnName("seniority").HasConversion<string>();
-            e.Property(x => x.EnglishLevel).HasColumnName("english_level").HasConversion<string>();
+            e.Property(x => x.Seniority)
+                .HasColumnName("seniority")
+                .HasConversion<string>()
+                .HasMaxLength(50);
+            e.Property(x => x.EnglishLevel)
+                .HasColumnName("english_level")
+                .HasConversion<string>()
+                .HasMaxLength(10);
             e.Property(x => x.GithubLink).HasColumnName("github_link");
+            e.Property(x => x.LinkedinUrl).HasColumnName("linkedin_url");
             e.Property(x => x.ProfilePhotoUrl).HasColumnName("profile_photo_url");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -158,7 +175,7 @@ public class AppDbContext : DbContext
     }
 
     // =========================================================================
-    // CATEGORIES / SKILLS (catálogo + pivots de candidato)
+    // CATEGORIES / SKILLS
     // =========================================================================
     private static void ConfigureCatalog(ModelBuilder modelBuilder)
     {
@@ -256,14 +273,24 @@ public class AppDbContext : DbContext
             e.Property(x => x.Title).HasColumnName("title").HasMaxLength(255).IsRequired();
             e.Property(x => x.Description).HasColumnName("description");
             e.Property(x => x.Salary).HasColumnName("salary").HasPrecision(12, 2);
-            e.Property(x => x.Modality).HasColumnName("modality").HasConversion<string>().IsRequired();
+            e.Property(x => x.Modality)
+                .HasColumnName("modality")
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
             e.Property(x => x.MinExperienceYears).HasColumnName("min_experience_years");
-            e.Property(x => x.RequiredEnglishLevel).HasColumnName("required_english_level").HasConversion<string>();
+            e.Property(x => x.RequiredEnglishLevel)
+                .HasColumnName("required_english_level")
+                .HasConversion<string>()
+                .HasMaxLength(10);
             e.Property(x => x.PositionsAvailable).HasColumnName("positions_available").HasDefaultValue(1);
             e.Property(x => x.TierId).HasColumnName("tier_id").IsRequired();
             e.Property(x => x.CandidatesToTest).HasColumnName("candidates_to_test");
             e.Property(x => x.CandidatesTestedCount).HasColumnName("candidates_tested_count").HasDefaultValue(0);
-            e.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasDefaultValue(Domain.Enums.OfferStatus.PendingPayment);
+            e.Property(x => x.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .HasMaxLength(50);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
             e.Property(x => x.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamp");
@@ -300,17 +327,20 @@ public class AppDbContext : DbContext
             e.ToTable("payments");
             e.Property(x => x.OfferId).HasColumnName("offer_id").IsRequired();
             e.Property(x => x.TierId).HasColumnName("tier_id").IsRequired();
-            e.Property(x => x.StripePaymentIntentId).HasColumnName("stripe_payment_intent_id").HasMaxLength(255);
-            e.Property(x => x.StripeCheckoutSessionId).HasColumnName("stripe_checkout_session_id").HasMaxLength(255);
+            e.Property(x => x.PaymentTransactionId).HasColumnName("payment_transaction_id").HasMaxLength(255);
+            e.Property(x => x.PaymentCheckoutId).HasColumnName("payment_checkout_id").HasMaxLength(255);
             e.Property(x => x.AmountCop).HasColumnName("amount_cop").HasPrecision(12, 2).IsRequired();
-            e.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasDefaultValue(Domain.Enums.PaymentStatus.Pending);
+            e.Property(x => x.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .HasMaxLength(50);
             e.Property(x => x.PaidAt).HasColumnName("paid_at").HasColumnType("timestamp");
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.OfferId).IsUnique().HasDatabaseName("idx_payments_offer_id");
             e.HasIndex(x => x.Status).HasDatabaseName("idx_payments_status");
-            e.HasIndex(x => x.StripePaymentIntentId).IsUnique().HasDatabaseName("idx_payments_stripe_intent");
-            e.HasIndex(x => x.StripeCheckoutSessionId).IsUnique();
+            e.HasIndex(x => x.PaymentTransactionId).IsUnique().HasDatabaseName("idx_payments_transaction_id");
+            e.HasIndex(x => x.PaymentCheckoutId).IsUnique();
 
             e.HasOne(x => x.JobOffer)
                 .WithOne(jo => jo.Payment)
@@ -377,7 +407,10 @@ public class AppDbContext : DbContext
             e.Property(x => x.MatchPercentage).HasColumnName("match_percentage").HasPrecision(5, 2);
             e.Property(x => x.AdjustedScore).HasColumnName("adjusted_score").HasPrecision(5, 2);
             e.Property(x => x.AiFeedback).HasColumnName("ai_feedback").HasColumnType("jsonb");
-            e.Property(x => x.Stage).HasColumnName("stage").HasConversion<string>().HasDefaultValue(Domain.Enums.MatchStage.Matched);
+            e.Property(x => x.Stage)
+                .HasColumnName("stage")
+                .HasConversion<string>()
+                .HasMaxLength(50);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
             e.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -400,6 +433,54 @@ public class AppDbContext : DbContext
             e.HasOne(x => x.CandidateProfile)
                 .WithMany(cp => cp.Matches)
                 .HasForeignKey(x => x.CandidateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+    }
+
+    // =========================================================================
+    // PROCTORING
+    // =========================================================================
+    private static void ConfigureProctoring(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ProctoringSession>(e =>
+        {
+            e.ToTable("proctoring_sessions");
+            e.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+            e.Property(x => x.UsuarioId).HasColumnName("usuario_id").IsRequired();
+            e.Property(x => x.SubmissionId).HasColumnName("submission_id");
+            e.Property(x => x.Inicio).HasColumnName("inicio").HasColumnType("timestamp").IsRequired();
+            e.Property(x => x.Fin).HasColumnName("fin").HasColumnType("timestamp");
+            e.Property(x => x.TotalFramesProcesados).HasColumnName("total_frames_procesados");
+            e.Property(x => x.IntegrityScore).HasColumnName("integrity_score").HasPrecision(5, 2);
+            e.Property(x => x.IntegritySummary).HasColumnName("integrity_summary");
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            e.HasIndex(x => x.SessionId).IsUnique();
+            e.HasIndex(x => x.SubmissionId).HasDatabaseName("idx_proctoring_sessions_submission");
+            e.HasIndex(x => x.UsuarioId).HasDatabaseName("idx_proctoring_sessions_usuario");
+
+            e.HasOne(x => x.Submission)
+                .WithMany()
+                .HasForeignKey(x => x.SubmissionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProctoringEvent>(e =>
+        {
+            e.ToTable("proctoring_events");
+            e.Property(x => x.SessionId).HasColumnName("session_id").IsRequired();
+            e.Property(x => x.Tipo).HasColumnName("tipo").IsRequired();
+            e.Property(x => x.Detalle).HasColumnName("detalle");
+            e.Property(x => x.Evidencia).HasColumnName("evidencia");
+            e.Property(x => x.Timestamp).HasColumnName("timestamp").HasColumnType("timestamp").IsRequired();
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            e.HasIndex(x => x.SessionId).HasDatabaseName("idx_proctoring_events_session");
+
+            e.HasOne(x => x.Session)
+                .WithMany(s => s.Events)
+                .HasForeignKey(x => x.SessionId)
+                .HasPrincipalKey(s => s.SessionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
@@ -431,7 +512,11 @@ public class AppDbContext : DbContext
             e.ToTable("test_questions");
             e.Property(x => x.TestId).HasColumnName("test_id").IsRequired();
             e.Property(x => x.OrderIndex).HasColumnName("order_index").IsRequired();
-            e.Property(x => x.QuestionType).HasColumnName("question_type").HasConversion<string>().IsRequired();
+            e.Property(x => x.QuestionType)
+                .HasColumnName("question_type")
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
             e.Property(x => x.QuestionText).HasColumnName("question_text").IsRequired();
             e.Property(x => x.Explanation).HasColumnName("explanation");
             e.Property(x => x.IsGorilla).HasColumnName("is_gorilla").HasDefaultValue(false);
@@ -459,7 +544,11 @@ public class AppDbContext : DbContext
         {
             e.ToTable("question_chat_messages");
             e.Property(x => x.QuestionId).HasColumnName("question_id").IsRequired();
-            e.Property(x => x.Role).HasColumnName("role").HasConversion<string>().IsRequired();
+            e.Property(x => x.Role)
+                .HasColumnName("role")
+                .HasConversion<string>()
+                .HasMaxLength(50)
+                .IsRequired();
             e.Property(x => x.Content).HasColumnName("content").IsRequired();
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -479,7 +568,10 @@ public class AppDbContext : DbContext
             e.Property(x => x.AnswersJson).HasColumnName("answers_json").HasColumnType("jsonb");
             e.Property(x => x.Score).HasColumnName("score").HasPrecision(5, 2);
             e.Property(x => x.Feedback).HasColumnName("feedback");
-            e.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasDefaultValue(Domain.Enums.SubmissionStatus.Pending);
+            e.Property(x => x.Status)
+                .HasColumnName("status")
+                .HasConversion<string>()
+                .HasMaxLength(50);
             e.Property(x => x.StartedAt).HasColumnName("started_at").HasColumnType("timestamp");
             e.Property(x => x.SubmittedAt).HasColumnName("submitted_at").HasColumnType("timestamp");
             e.Property(x => x.AiEvaluatedAt).HasColumnName("ai_evaluated_at").HasColumnType("timestamp");

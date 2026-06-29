@@ -1,45 +1,130 @@
+using MatchIQ.API.Common;
+using MatchIQ.Application.Common.Interfaces;
+using MatchIQ.Application.Modules.Tests;
+using MatchIQ.Application.Modules.Tests.Dtos;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
 namespace MatchIQ.API.Controllers;
 
-// [ApiController]
-// [Route("api/tests")]
-public class TestsController // : ControllerBase
+[ApiController]
+[Route("api/tests")]
+public class TestsController : ControllerBase
 {
-    // TODO: inyectar TestService, TestEditorService
+    private readonly TestService _testService;
+    private readonly TestEditorService _testEditorService;
+    private readonly ProctoringService _proctoringService;
+    private readonly ICurrentUserService _currentUser;
 
-    // GET api/tests/{offerId}
-    // [Authorize(Roles = "Company")]
-    // TODO: GetFullTestAsync(int offerId)
-    //       test completo CON respuestas correctas (solo para empresa)
+    public TestsController(
+        TestService testService,
+        TestEditorService testEditorService,
+        ProctoringService proctoringService,
+        ICurrentUserService currentUser)
+    {
+        _testService = testService;
+        _testEditorService = testEditorService;
+        _proctoringService = proctoringService;
+        _currentUser = currentUser;
+    }
 
-    // POST api/tests/{offerId}/regenerate
-    // [Authorize(Roles = "Company")]
-    // TODO: RegenerateTestAsync(int offerId)
-    //       regenera el test completo si la empresa lo solicita
+    // ── Empresa ───────────────────────────────────────────────────────────────────
 
-    // ── Chat de edición de preguntas ──────────────────────────────────────────
+    [HttpPost("{offerId:int}/generate")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
+    {
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes);
+        return Ok(ApiResponse.Ok(test, "Test generado correctamente."));
+    }
 
-    // GET api/tests/questions/{questionId}/chat
-    // [Authorize(Roles = "Company")]
-    // TODO: GetChatHistoryAsync(int questionId)
-    //       historial de mensajes del chat para esa pregunta
+    [HttpPost("{offerId:int}/regenerate")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> RegenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
+    {
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes, forceRegenerate: true);
+        return Ok(ApiResponse.Ok(test, "Test regenerado correctamente."));
+    }
 
-    // POST api/tests/questions/{questionId}/chat
-    // [Authorize(Roles = "Company")]
-    // TODO: SendChatMessageAsync(int questionId, [FromBody] ChatMessageDto dto)
-    //       admin envía mensaje → IA regenera la pregunta → retorna pregunta actualizada
+    [HttpGet("{offerId:int}")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetFullTest(int offerId)
+    {
+        var test = await _testService.GetFullTestAsync(offerId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(test));
+    }
 
-    // ── Endpoints para candidatos ─────────────────────────────────────────────
+    [HttpGet("questions/{questionId:int}/chat")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetChatHistory(int questionId)
+    {
+        var history = await _testEditorService.GetChatHistoryAsync(questionId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(history));
+    }
 
-    // GET api/tests/{offerId}/candidate
-    // [Authorize(Roles = "Candidate")]
-    // TODO: GetTestForCandidateAsync(int offerId)
-    //       test SIN respuestas correctas
+    [HttpPost("questions/{questionId:int}/chat")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> SendChatMessage(int questionId, [FromBody] SendChatMessageDto dto)
+    {
+        var result = await _testEditorService.SendMessageAsync(questionId, _currentUser.UserId, dto.Message);
+        return Ok(ApiResponse.Ok(result));
+    }
 
-    // POST api/tests/{testId}/submit
-    // [Authorize(Roles = "Candidate")]
-    // TODO: SubmitAnswersAsync(int testId, [FromBody] SubmitAnswersDto dto)
+    [HttpGet("submissions/{matchId:int}")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetCandidateSubmission(int matchId)
+    {
+        var detail = await _testService.GetCandidateSubmissionAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(detail));
+    }
 
-    // GET api/tests/{testId}/result
-    // [Authorize(Roles = "Candidate")]
-    // TODO: GetSubmissionResultAsync(int testId)
+    [HttpGet("submissions/{matchId:int}/proctoring")]
+    [Authorize(Roles = "Company")]
+    public async Task<IActionResult> GetProctoringReport(int matchId)
+    {
+        var report = await _proctoringService.GetReportByMatchAsync(matchId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(report));
+    }
+
+    // ── Candidato ─────────────────────────────────────────────────────────────────
+
+    [HttpGet("candidate")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> GetMyTests()
+    {
+        var tests = await _testService.GetMyTestsAsync(_currentUser.UserId);
+        return Ok(ApiResponse.Ok(tests));
+    }
+
+    [HttpGet("{offerId:int}/candidate/preview")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> GetTestPreview(int offerId)
+    {
+        var preview = await _testService.GetTestPreviewAsync(offerId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(preview));
+    }
+
+    [HttpPost("{offerId:int}/candidate/start")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> StartTest(int offerId)
+    {
+        var test = await _testService.StartTestAsync(offerId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(test));
+    }
+
+    [HttpPost("{testId:int}/submit")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> SubmitAnswers(int testId, [FromBody] SubmitAnswersDto dto)
+    {
+        var result = await _testService.SubmitAnswersAsync(testId, _currentUser.UserId, dto);
+        return Ok(ApiResponse.Ok(result, "Respuestas enviadas y evaluadas correctamente."));
+    }
+
+    [HttpGet("{testId:int}/result")]
+    [Authorize(Roles = "Candidate")]
+    public async Task<IActionResult> GetSubmissionResult(int testId)
+    {
+        var result = await _testService.GetSubmissionResultAsync(testId, _currentUser.UserId);
+        return Ok(ApiResponse.Ok(result));
+    }
 }
