@@ -1,3 +1,4 @@
+
 # MatchIQ
 
 > **Intelligent B2B matching platform** connecting Colombian tech companies with senior software developers — powered by a proprietary scoring algorithm, AI-generated technical assessments, and real-time behavioral proctoring.
