@@ -6,57 +6,66 @@ namespace MatchIQ.Infrastructure.AI.Prompts;
 
 public static class QuestionEditPrompt
 {
-    public static string BuildSystemPrompt() => """
-        Eres un editor experto de preguntas técnicas para evaluaciones de desarrollo de software.
-        Tu tarea es modificar una pregunta existente según las instrucciones del administrador.
+    public static string BuildSystemPrompt(TestLanguage language)
+    {
+        var languageRule = language == TestLanguage.English
+            ? "- The question was originally written in English. Keep question_text, explanation, gorilla_hint and options in English, unless the administrator explicitly asks to translate it."
+            : "- La pregunta fue escrita originalmente en español. Mantén question_text, explanation, gorilla_hint y options en español, salvo que el administrador pida explícitamente traducirla.";
 
-        Reglas:
-        - Mantén el mismo question_type (no puedes cambiar code_challenge a multiple_choice ni viceversa).
-        - Mantén el mismo order_index.
-        - Aplica exactamente lo que pide el administrador, sin cambios adicionales no solicitados.
-        - Responde ÚNICAMENTE con JSON válido de la pregunta modificada, sin texto adicional.
+        return $$"""
+            Eres un editor experto de preguntas técnicas para evaluaciones de desarrollo de software.
+            Tu tarea es modificar una pregunta existente según las instrucciones del administrador.
 
-        Formato de respuesta para multiple_choice:
-        {
-          "order_index": número,
-          "question_type": "multiple_choice",
-          "question_text": "string",
-          "explanation": "string",
-          "is_gorilla": bool,
-          "gorilla_hint": "string o null",
-          "options": { "A": "string", "B": "string", "C": "string", "D": "string" },
-          "correct_answer": "A" | "B" | "C" | "D",
-          "language": null,
-          "function_signature": null,
-          "example_input": null,
-          "expected_behavior": null
-        }
+            Reglas:
+            - Mantén el mismo question_type (no puedes cambiar code_challenge a multiple_choice ni viceversa).
+            - Mantén el mismo order_index.
+            {{languageRule}}
+            - Aplica exactamente lo que pide el administrador, sin cambios adicionales no solicitados.
+            - Responde ÚNICAMENTE con JSON válido de la pregunta modificada, sin texto adicional.
 
-        Formato de respuesta para code_challenge:
-        {
-          "order_index": número,
-          "question_type": "code_challenge",
-          "question_text": "string",
-          "explanation": "string",
-          "is_gorilla": false,
-          "gorilla_hint": null,
-          "options": null,
-          "correct_answer": null,
-          "language": "string",
-          "function_signature": "string",
-          "example_input": "string",
-          "expected_behavior": "string"
-        }
-        """;
+            Formato de respuesta para multiple_choice:
+            {
+              "order_index": número,
+              "question_type": "multiple_choice",
+              "question_text": "string",
+              "explanation": "string",
+              "is_gorilla": bool,
+              "gorilla_hint": "string o null",
+              "options": { "A": "string", "B": "string", "C": "string", "D": "string" },
+              "correct_answer": "A" | "B" | "C" | "D",
+              "language": null,
+              "function_signature": null,
+              "example_input": null,
+              "expected_behavior": null
+            }
+
+            Formato de respuesta para code_challenge:
+            {
+              "order_index": número,
+              "question_type": "code_challenge",
+              "question_text": "string",
+              "explanation": "string",
+              "is_gorilla": false,
+              "gorilla_hint": null,
+              "options": null,
+              "correct_answer": null,
+              "language": "string",
+              "function_signature": "string",
+              "example_input": "string",
+              "expected_behavior": "string"
+            }
+            """;
+    }
 
     public static List<ChatMessage> BuildMessages(
         TestQuestion currentQuestion,
         IEnumerable<QuestionChatMessage> history,
-        string newAdminMessage)
+        string newAdminMessage,
+        TestLanguage language)
     {
         var messages = new List<ChatMessage>
         {
-            ChatMessage.FromSystem(BuildSystemPrompt()),
+            ChatMessage.FromSystem(BuildSystemPrompt(language)),
             ChatMessage.FromUser(BuildCurrentQuestionContext(currentQuestion))
         };
 

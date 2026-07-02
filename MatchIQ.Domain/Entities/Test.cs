@@ -1,3 +1,5 @@
+using MatchIQ.Domain.Enums;
+
 namespace MatchIQ.Domain.Entities;
 
 // Test técnico asociado a una oferta
@@ -10,6 +12,7 @@ public class Test
     public int OfferId { get; set; }
     public string Title { get; set; } = string.Empty;
     public int TimeLimitMinutes { get; set; } = 30;
+    public TestLanguage TestLanguage { get; set; } = TestLanguage.Spanish;
     public DateTime CreatedAt { get; set; }
 
     public JobOffer JobOffer { get; set; } = null!;

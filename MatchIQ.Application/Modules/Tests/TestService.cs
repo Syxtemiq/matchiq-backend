@@ -22,7 +22,7 @@ public class TestService
         _aiService = aiService;
     }
 
-    public async Task<TestDto> GenerateTestAsync(int offerId, int userId, int timeLimitMinutes, bool forceRegenerate = false)
+    public async Task<TestDto> GenerateTestAsync(int offerId, int userId, int timeLimitMinutes, string? testLanguage = null, bool forceRegenerate = false)
     {
         var offer = await LoadOfferForAIAsync(offerId)
             ?? throw new KeyNotFoundException("Oferta no encontrada.");
@@ -44,13 +44,18 @@ public class TestService
             await _context.SaveChangesAsync();
         }
 
-        var generated = await _aiService.GenerateTestAsync(offer);
+        var language = TestLanguage.Spanish;
+        if (testLanguage is not null && !Enum.TryParse<TestLanguage>(testLanguage, ignoreCase: true, out language))
+            throw new InvalidOperationException($"Idioma de test inválido: '{testLanguage}'. Valores válidos: Spanish, English.");
+
+        var generated = await _aiService.GenerateTestAsync(offer, language);
 
         var test = new Test
         {
             OfferId = offerId,
             Title = generated.Title,
-            TimeLimitMinutes = timeLimitMinutes
+            TimeLimitMinutes = timeLimitMinutes,
+            TestLanguage = language
         };
 
         await _testRepository.CreateAsync(test);
@@ -310,6 +315,7 @@ public class TestService
         OfferId = test.OfferId,
         Title = test.Title,
         TimeLimitMinutes = test.TimeLimitMinutes,
+        TestLanguage = test.TestLanguage.ToString(),
         CreatedAt = test.CreatedAt,
         Questions = test.TestQuestions
             .OrderBy(q => q.OrderIndex)

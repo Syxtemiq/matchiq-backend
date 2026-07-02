@@ -41,6 +41,11 @@ public class TestEditorService
         if (offerStatus != OfferStatus.PendingPayment)
             throw new InvalidOperationException("No se pueden modificar preguntas una vez que la oferta ha sido activada.");
 
+        var testLanguage = await _context.Tests
+            .Where(t => t.Id == question.TestId)
+            .Select(t => t.TestLanguage)
+            .FirstOrDefaultAsync();
+
         var history = question.QuestionChatMessages
             .OrderBy(m => m.CreatedAt)
             .ToList();
@@ -54,7 +59,7 @@ public class TestEditorService
         });
 
         // La IA recibe la pregunta actual, el historial completo y el nuevo mensaje
-        var regenerated = await _aiService.RegenerateQuestionAsync(question, history, message);
+        var regenerated = await _aiService.RegenerateQuestionAsync(question, history, message, testLanguage);
 
         // Actualizar la pregunta con la versión regenerada por la IA
         question.QuestionText = regenerated.QuestionText;

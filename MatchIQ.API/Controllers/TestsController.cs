@@ -34,7 +34,7 @@ public class TestsController : ControllerBase
     [Authorize(Roles = "Company")]
     public async Task<IActionResult> GenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
     {
-        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes);
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes, dto.TestLanguage);
         return Ok(ApiResponse.Ok(test, "Test generado correctamente."));
     }
 
@@ -42,7 +42,7 @@ public class TestsController : ControllerBase
     [Authorize(Roles = "Company")]
     public async Task<IActionResult> RegenerateTest(int offerId, [FromBody] GenerateTestRequestDto dto)
     {
-        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes, forceRegenerate: true);
+        var test = await _testService.GenerateTestAsync(offerId, _currentUser.UserId, dto.TimeLimitMinutes, dto.TestLanguage, forceRegenerate: true);
         return Ok(ApiResponse.Ok(test, "Test regenerado correctamente."));
     }
 

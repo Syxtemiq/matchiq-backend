@@ -28,15 +28,17 @@ public class OpenAIService : IAIService
         _model = configuration["OpenAI:Model"] ?? Models.Gpt_4o_mini;
     }
 
-    public async Task<GeneratedTestDto> GenerateTestAsync(JobOffer offer)
+    public async Task<GeneratedTestDto> GenerateTestAsync(JobOffer offer, TestLanguage language)
     {
-        var prompt = TestGenerationPrompt.Build(offer);
+        var prompt = TestGenerationPrompt.Build(offer, language);
 
         var completion = await _openAI.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
         {
             Messages =
             [
-                ChatMessage.FromSystem("Eres un evaluador técnico senior. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional."),
+                ChatMessage.FromSystem(language == TestLanguage.English
+                    ? "You are a senior technical assessor. Respond ONLY with valid JSON, no markdown or additional text."
+                    : "Eres un evaluador técnico senior. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional."),
                 ChatMessage.FromUser(prompt)
             ],
             Model = _model,
@@ -60,9 +62,10 @@ public class OpenAIService : IAIService
     public async Task<GeneratedQuestionDto> RegenerateQuestionAsync(
         TestQuestion question,
         IEnumerable<QuestionChatMessage> history,
-        string adminMessage)
+        string adminMessage,
+        TestLanguage language)
     {
-        var messages = QuestionEditPrompt.BuildMessages(question, history, adminMessage);
+        var messages = QuestionEditPrompt.BuildMessages(question, history, adminMessage, language);
 
         var completion = await _openAI.ChatCompletion.CreateCompletion(new ChatCompletionCreateRequest
         {

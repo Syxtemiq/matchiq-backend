@@ -496,6 +496,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.OfferId).HasColumnName("offer_id").IsRequired();
             e.Property(x => x.Title).HasColumnName("title").HasMaxLength(255).IsRequired();
             e.Property(x => x.TimeLimitMinutes).HasColumnName("time_limit_minutes").HasDefaultValue(30);
+            e.Property(x => x.TestLanguage).HasColumnName("test_language").HasConversion<string>().HasMaxLength(10).HasDefaultValue(Domain.Enums.TestLanguage.Spanish);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.OfferId).IsUnique().HasDatabaseName("idx_tests_offer_id");
