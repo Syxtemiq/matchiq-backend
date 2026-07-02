@@ -14,6 +14,7 @@ public class CandidateProfile
     public string? GithubLink { get; set; }
     public string? LinkedinUrl { get; set; }
     public string? ProfilePhotoUrl { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 
     public User User { get; set; } = null!;

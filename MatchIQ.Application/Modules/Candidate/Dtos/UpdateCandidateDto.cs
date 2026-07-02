@@ -16,6 +16,9 @@ public class UpdateCandidateDto
     public string? GithubLink { get; set; }
     public string? LinkedinUrl { get; set; }
     public string? ProfilePhotoUrl { get; set; }
+
+    [RegularExpression(@"^\+?[0-9\s\-()]{7,20}$", ErrorMessage = "El número de teléfono no es válido.")]
+    public string? PhoneNumber { get; set; }
     public List<int> CategoryIds { get; set; } = [];
     public List<SkillLevelDto> Skills { get; set; } = [];
 }

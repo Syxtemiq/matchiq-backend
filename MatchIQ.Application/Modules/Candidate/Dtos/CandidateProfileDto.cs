@@ -13,6 +13,7 @@ public class CandidateProfileDto
     public string? GithubLink { get; set; }
     public string? LinkedinUrl { get; set; }
     public string? ProfilePhotoUrl { get; set; }
+    public string PhoneNumber { get; set; } = string.Empty;
     public bool ProfileCompleted { get; set; }
     public List<CategoryDto> Categories { get; set; } = [];
     public List<CandidateSkillDto> Skills { get; set; } = [];

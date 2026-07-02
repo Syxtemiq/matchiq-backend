@@ -147,6 +147,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.GithubLink).HasColumnName("github_link");
             e.Property(x => x.LinkedinUrl).HasColumnName("linkedin_url");
             e.Property(x => x.ProfilePhotoUrl).HasColumnName("profile_photo_url");
+            e.Property(x => x.PhoneNumber).HasColumnName("phone_number").HasMaxLength(20).IsRequired();
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp").HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             e.HasIndex(x => x.UserId).IsUnique();

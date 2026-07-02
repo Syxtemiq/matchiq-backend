@@ -4,6 +4,11 @@ public class CandidateSubmissionDetailDto
 {
     public int MatchId { get; set; }
     public string CandidateFullName { get; set; } = string.Empty;
+    public string CandidateEmail { get; set; } = string.Empty;
+    public string? CandidateGithubLink { get; set; }
+    public string? CandidateLinkedinUrl { get; set; }
+    public string? CandidateProfilePhotoUrl { get; set; }
+    public string CandidatePhoneNumber { get; set; } = string.Empty;
     public decimal? Score { get; set; }
     public string? GlobalFeedback { get; set; }
     public string Status { get; set; } = string.Empty;

@@ -103,6 +103,9 @@ public class CandidateService
         if (dto.ProfilePhotoUrl is not null)
             profile.ProfilePhotoUrl = dto.ProfilePhotoUrl;
 
+        if (dto.PhoneNumber is not null)
+            profile.PhoneNumber = dto.PhoneNumber;
+
         await _context.SaveChangesAsync();
 
         // Reemplazar categorías
@@ -163,6 +166,7 @@ public class CandidateService
             GithubLink = profile?.GithubLink,
             LinkedinUrl = profile?.LinkedinUrl,
             ProfilePhotoUrl = profile?.ProfilePhotoUrl,
+            PhoneNumber = profile?.PhoneNumber ?? string.Empty,
             ProfileCompleted = profileCompleted,
             Categories = profile?.CandidateCategories
                 .Select(cc => new CategoryDto { Id = cc.CategoryId, Name = cc.Category.Name })

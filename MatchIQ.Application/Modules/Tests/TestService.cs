@@ -429,6 +429,11 @@ public class TestService
         {
             MatchId           = match.Id,
             CandidateFullName = match.CandidateProfile.User.FullName,
+            CandidateEmail    = match.CandidateProfile.User.Email,
+            CandidateGithubLink = match.CandidateProfile.GithubLink,
+            CandidateLinkedinUrl = match.CandidateProfile.LinkedinUrl,
+            CandidateProfilePhotoUrl = match.CandidateProfile.ProfilePhotoUrl,
+            CandidatePhoneNumber = match.CandidateProfile.PhoneNumber,
             Score             = submission.Score,
             GlobalFeedback    = evaluation?.Feedback,
             Status            = submission.Status.ToString(),

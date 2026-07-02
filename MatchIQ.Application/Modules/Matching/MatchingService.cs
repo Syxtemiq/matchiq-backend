@@ -431,12 +431,20 @@ public class MatchingService
             .Select(cs => cs.Skill.Name)
             .ToList();
 
+        // El contacto directo del candidato solo se revela una vez que respondió el test
+        // (submission evaluada) — antes de eso la empresa solo ve el ranking y el fit.
+        var testCompleted = submission is not null;
+
         return new MatchResultDto
         {
             MatchId = match.Id,
             CandidateId = match.CandidateId,
             FullName = match.CandidateProfile.User.FullName ?? string.Empty,
-            Email = match.Stage == MatchStage.Selected ? match.CandidateProfile.User.Email : null,
+            Email = testCompleted ? match.CandidateProfile.User.Email : null,
+            GithubLink = testCompleted ? match.CandidateProfile.GithubLink : null,
+            LinkedinUrl = testCompleted ? match.CandidateProfile.LinkedinUrl : null,
+            ProfilePhotoUrl = testCompleted ? match.CandidateProfile.ProfilePhotoUrl : null,
+            PhoneNumber = testCompleted ? match.CandidateProfile.PhoneNumber : null,
             ExperienceYears = match.CandidateProfile.ExperienceYears,
             EnglishLevel = match.CandidateProfile.EnglishLevel?.ToString(),
             MatchPercentage = match.MatchPercentage,
